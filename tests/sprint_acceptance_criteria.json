@@ -1,0 +1,10 @@
+{
+  "establish-a-testing-framework-(`pytest`,-etc.)-with-initial-tests.": {
+    "test_file": "tests/test_foundational.py",
+    "description": "Verifies that Establish a testing framework (`pytest`, etc.) with initial tests.",
+    "cases": {
+      "success": "Asserts the primary success case.",
+      "edge_case_null_input": "Asserts that providing null input is handled gracefully."
+    }
+  }
+}
