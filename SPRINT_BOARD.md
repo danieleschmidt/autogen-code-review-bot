@@ -3,4 +3,7 @@
 ## Backlog
 | Task | Owner | Priority | Status |
 | --- | --- | --- | --- |
-| Establish a testing framework (`pytest`, etc.) with initial tests. | @agent | P0 | Done |
+| Add language detection utility | @agent | P1 | Todo |
+| Integrate language-specific linters in analyze_pr | @agent | P1 | Todo |
+| Load linter configuration from YAML | @agent | P2 | Todo |
+| Document multi-language setup in README | @agent | P3 | Todo |
