@@ -7,6 +7,7 @@ from .agents import (
     run_dual_review,
 )
 from .pr_analysis import PRAnalysisResult, analyze_pr
+from .language import detect_language
 
 __all__ = [
     "AgentConfig",
@@ -17,4 +18,5 @@ __all__ = [
     "run_dual_review",
     "PRAnalysisResult",
     "analyze_pr",
+    "detect_language",
 ]
