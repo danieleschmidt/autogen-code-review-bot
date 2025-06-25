@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "autogen_code_review_bot"
+version = "0.0.1"
+requires-python = ">=3.8"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+packages = [
+    "autogen_code_review_bot",
+    "autogen_review_bot",
+]
