@@ -62,6 +62,34 @@ review_criteria:
   documentation: true
 ```
 
+### Linter Configuration
+
+The bot uses language-specific linters to check code style. A YAML file can
+override the default mapping of languages to linting tools:
+
+```yaml
+# linters.yaml
+linters:
+  python: ruff
+  javascript: eslint
+  typescript: eslint
+  go: golangci-lint
+```
+
+Pass the path to this file when invoking `analyze_pr` to customize which
+linters run for each language.
+Unspecified languages fall back to the built-in defaults for Python,
+JavaScript, and TypeScript.
+
+Example usage:
+
+```python
+from autogen_code_review_bot import analyze_pr
+
+result = analyze_pr("/path/to/repo", config_path="linters.yaml")
+print(result.style.output)
+```
+
 ## Usage Examples
 
 ### Manual Review

@@ -6,6 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "autogen_code_review_bot"
 version = "0.0.1"
 requires-python = ">=3.8"
+dependencies = ["PyYAML", "requests"]
 
 [tool.setuptools]
 package-dir = {"" = "src"}
