@@ -1,34 +1,9 @@
 {
-  "add-language-detection-utility": {
-    "description": "Add language detection utility",
+  "github-integration": {
+    "description": "Implement GitHub Integration",
     "cases": {
-      "detects_known_extensions": "Files with .py, .js, .ts, .go, .rs return correct language",
-      "unknown_extension": "Returns 'unknown' for unrecognized extensions"
+      "default_case": "Placeholder for acceptance criteria"
     },
-    "test_file": "tests/add_language_detection_utility.py"
-  },
-  "integrate-language-specific-linters-in-analyze-pr": {
-    "description": "Integrate language-specific linters in analyze_pr",
-    "cases": {
-      "python_linter": "Runs ruff for Python files",
-      "js_linter_missing": "Outputs 'not installed' if eslint is missing"
-    },
-    "test_file": "tests/integrate_language_specific_linters_in_analyze_pr.py"
-  },
-  "load-linter-configuration-from-yaml": {
-    "description": "Load linter configuration from YAML",
-    "cases": {
-      "yaml_parsed": "Reads languages and linters from config file",
-      "fallback_defaults": "Uses default tools when not specified"
-    },
-    "test_file": "tests/load_linter_configuration_from_yaml.py"
-  },
-  "document-multi-language-setup-in-readme": {
-    "description": "Document multi-language setup in README",
-    "cases": {
-      "instructions_present": "README explains how to enable extra languages",
-      "examples_included": "Provides sample config snippet"
-    },
-    "test_file": "tests/document_multi_language_setup_in_readme.py"
+    "test_file": "tests/test_github_integration.py"
   }
 }
