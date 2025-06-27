@@ -5,7 +5,34 @@ from __future__ import annotations
 from dataclasses import dataclass
 from shutil import which
 from subprocess import CalledProcessError, run
-from typing import List
+from typing import Dict, List, Set
+import os
+from pathlib import Path
+import yaml
+
+from .language_detection import detect_language
+
+# Default mapping of languages to linter executables
+DEFAULT_LINTERS: Dict[str, str] = {
+    "python": "ruff",
+    "javascript": "eslint",
+    "typescript": "eslint",
+}
+
+
+def load_linter_config(config_path: str | Path | None = None) -> Dict[str, str]:
+    """Return language→linter mapping loaded from ``config_path``.
+
+    Missing languages fall back to :data:`DEFAULT_LINTERS`.
+    """
+    mapping = DEFAULT_LINTERS.copy()
+    if config_path:
+        with open(config_path, "r", encoding="utf-8") as fh:
+            data = yaml.safe_load(fh) or {}
+        linters = data.get("linters", {}) if isinstance(data, dict) else {}
+        if isinstance(linters, dict):
+            mapping.update({str(k): str(v) for k, v in linters.items()})
+    return mapping
 
 
 @dataclass
@@ -25,6 +52,20 @@ class PRAnalysisResult:
     performance: AnalysisSection
 
 
+def _detect_repo_languages(repo_path: str | Path) -> Set[str]:
+    """Return a set of languages present in ``repo_path``."""
+
+    repo_path = Path(repo_path)
+    languages: Set[str] = set()
+    for root, _, files in os.walk(repo_path):
+        for name in files:
+            file_path = Path(root) / name
+            lang = detect_language(file_path)
+            if lang != "unknown":
+                languages.add(lang)
+    return languages
+
+
 def _run_command(cmd: List[str], cwd: str) -> str:
     """Execute ``cmd`` in ``cwd`` and return combined output."""
 
@@ -37,16 +78,37 @@ def _run_command(cmd: List[str], cwd: str) -> str:
         return (output + "\n" + err).strip()
 
 
-def analyze_pr(repo_path: str) -> PRAnalysisResult:
-    """Run static analysis tools against ``repo_path`` and return the results."""
+def analyze_pr(repo_path: str, config_path: str | None = None) -> PRAnalysisResult:
+    """Run static analysis tools against ``repo_path`` and return the results.
+
+    Parameters
+    ----------
+    repo_path:
+        Path to the repository under analysis.
+    config_path:
+        Optional YAML file specifying language→linter mappings.
+    """
 
     def ensure(tool: str) -> str:
         return "not installed" if which(tool) is None else ""
 
-    # Style analysis via ruff
-    style_output = ensure("ruff") or _run_command(
-        ["ruff", "check", repo_path], cwd=repo_path
-    )
+    languages = _detect_repo_languages(repo_path)
+    linters = load_linter_config(config_path)
+
+    style_sections: List[tuple[str, str]] = []
+    for lang in sorted(languages):
+        tool = linters.get(lang)
+        if not tool:
+            continue
+        cmd = [tool]
+        if tool == "ruff":
+            cmd.append("check")
+        cmd.append(repo_path)
+        output = ensure(tool) or _run_command(cmd, cwd=repo_path)
+        style_sections.append((tool, output))
+
+    style_tool = "+".join(name for name, _ in style_sections) or ""
+    style_output = "\n".join(f"{name}:\n{out}" for name, out in style_sections)
 
     # Security analysis via bandit
     security_output = ensure("bandit") or _run_command(
@@ -60,6 +122,6 @@ def analyze_pr(repo_path: str) -> PRAnalysisResult:
 
     return PRAnalysisResult(
         security=AnalysisSection(tool="bandit", output=security_output),
-        style=AnalysisSection(tool="ruff", output=style_output),
+        style=AnalysisSection(tool=style_tool or "lint", output=style_output),
         performance=AnalysisSection(tool="radon", output=performance_output),
     )
