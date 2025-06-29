@@ -14,14 +14,21 @@ Two-agent "coder" + "reviewer" loop using Microsoft AutoGen for automated PR cri
 ## Quick Start
 
 ```bash
-# Install dependencies
-pip install -r requirements.txt
+# Install dependencies and dev tools
+pip install -e .[dev]
 
 # Configure GitHub webhook
 python setup_webhook.py --repo your-org/your-repo
 
 # Start the review bot
 python bot.py --config config/default.yaml
+```
+
+### Pre-commit Hooks
+Run code style and secret scanning checks before committing:
+
+```bash
+pre-commit run --all-files
 ```
 
 ## Agent Roles
@@ -52,8 +59,8 @@ agents:
     focus_areas: ["security", "performance", "standards"]
 
 github:
-  webhook_secret: "your_webhook_secret"
-  bot_token: "your_github_token"
+  webhook_secret: "your_webhook_secret"  # pragma: allowlist secret
+  bot_token: "your_github_token"  # pragma: allowlist secret
 
 review_criteria:
   security_scan: true
@@ -113,7 +120,8 @@ You can also run the analysis manually and post the results to a pull request:
 ```python
 from autogen_code_review_bot.github_integration import analyze_and_comment
 
-analyze_and_comment('/path/to/repo', 'owner/repo', 123, 'gh-token')
+# GITHUB_TOKEN environment variable must be set
+analyze_and_comment('/path/to/repo', 'owner/repo', 123)
 ```
 
 ## Sample Review Output
