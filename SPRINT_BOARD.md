@@ -3,4 +3,4 @@
 ## Backlog
 | Task | Owner | Priority | Status |
 | --- | --- | --- | --- |
-| Implement GitHub Integration | @agent | P1 | Todo |
+| Implement GitHub Integration | @agent | P1 | Done |
