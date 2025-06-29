@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import time
 from typing import Any, TYPE_CHECKING
 
@@ -14,14 +15,33 @@ if TYPE_CHECKING:  # pragma: no cover - type checking only
     from .pr_analysis import PRAnalysisResult
 
 
-def _request_with_retries(method: str, url: str, *, token: str, data: Any | None = None, params: dict[str, Any] | None = None, retries: int = 3) -> requests.Response:
+def _get_token(token: str | None) -> str:
+    """Return ``token`` or the value from ``GITHUB_TOKEN`` environment variable."""
+
+    env_token = os.getenv("GITHUB_TOKEN")
+    final = token or env_token
+    if not final:
+        raise ValueError("GitHub token not provided")
+    return final
+
+
+def _request_with_retries(
+    method: str,
+    url: str,
+    *,
+    token: str | None,
+    data: Any | None = None,
+    params: dict[str, Any] | None = None,
+    retries: int = 3,
+) -> requests.Response:
     """Return a ``requests`` response using ``method`` with simple retry logic."""
+    token_val = _get_token(token)
     for attempt in range(retries):
         try:
             resp = requests.request(
                 method,
                 url,
-                headers=_headers(token),
+                headers=_headers(token_val),
                 data=data,
                 params=params,
                 timeout=10,
@@ -39,7 +59,7 @@ def _headers(token: str) -> dict[str, str]:
     return {"Authorization": f"token {token}", "Accept": "application/vnd.github+json"}
 
 
-def get_pull_request_diff(repo: str, pr_number: int, token: str) -> str:
+def get_pull_request_diff(repo: str, pr_number: int, token: str | None = None) -> str:
     """Return the diff for ``pr_number`` in ``repo``."""
 
     url = f"{API_URL}/repos/{repo}/pulls/{pr_number}"
@@ -52,7 +72,9 @@ def get_pull_request_diff(repo: str, pr_number: int, token: str) -> str:
     return resp.text
 
 
-def post_comment(repo: str, pr_number: int, body: str, token: str) -> Any:
+def post_comment(
+    repo: str, pr_number: int, body: str, token: str | None = None
+) -> Any:
     """Post ``body`` as a comment on the pull request."""
 
     url = f"{API_URL}/repos/{repo}/issues/{pr_number}/comments"
@@ -77,7 +99,11 @@ def format_analysis_result(result: PRAnalysisResult) -> str:
 
 
 def analyze_and_comment(
-    repo_path: str, repo: str, pr_number: int, token: str, config_path: str | None = None
+    repo_path: str,
+    repo: str,
+    pr_number: int,
+    token: str | None = None,
+    config_path: str | None = None,
 ) -> Any:
     """Analyze the repo and post the results as a comment on the PR."""
 

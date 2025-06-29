@@ -8,6 +8,17 @@ version = "0.0.1"
 requires-python = ">=3.8"
 dependencies = ["PyYAML", "requests"]
 
+[project.optional-dependencies]
+dev = [
+    "pre-commit",
+    "ruff",
+    "bandit",
+    "pytest",
+    "pytest-cov",
+    "pytest-xdist",
+    "detect-secrets",
+]
+
 [tool.setuptools]
 package-dir = {"" = "src"}
 packages = [

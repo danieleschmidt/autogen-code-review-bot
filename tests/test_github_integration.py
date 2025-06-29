@@ -1,4 +1,5 @@
 import requests
+import pytest
 from autogen_code_review_bot.github_integration import (
     get_pull_request_diff,
     post_comment,
@@ -41,3 +42,25 @@ def test_post_comment_calls_api(monkeypatch):
     assert called['method'] == 'post'
     assert '/repos/owner/repo/issues/42/comments' in called['url']
     assert resp == {'ok': True}
+
+
+def test_token_from_environment(monkeypatch):
+    monkeypatch.setenv('GITHUB_TOKEN', 'envtok')
+
+    def fake_request(method, url, headers=None, **kwargs):
+        assert headers['Authorization'] == 'token envtok'
+        class Resp:
+            text = 'diff'
+            def raise_for_status(self):
+                pass
+        return Resp()
+
+    monkeypatch.setattr(requests, 'request', fake_request)
+    diff = get_pull_request_diff('owner/repo', 1)
+    assert diff == 'diff'
+
+
+def test_missing_token_raises(monkeypatch):
+    monkeypatch.delenv('GITHUB_TOKEN', raising=False)
+    with pytest.raises(ValueError):
+        get_pull_request_diff('owner/repo', 1)
