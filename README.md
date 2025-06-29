@@ -6,7 +6,7 @@ Two-agent "coder" + "reviewer" loop using Microsoft AutoGen for automated PR cri
 
 - **Dual-Agent Architecture**: Specialized "Coder" and "Reviewer" agents with distinct personalities and expertise
 - **Automated PR Analysis**: Comprehensive pull request review with security, performance, and style feedback
-- **Multi-Language Support**: Python, JavaScript, TypeScript, Go, Rust, and more
+- **Multi-Language Support**: Python, JavaScript, TypeScript, Go, Rust, Ruby, and more
 - **GitHub Integration**: Seamless webhook integration for automatic PR reviews
 - **Configurable Rules**: Customizable review criteria and coding standards
 - **Learning System**: Agents improve through feedback loops and historical review data
@@ -74,6 +74,7 @@ linters:
   javascript: eslint
   typescript: eslint
   go: golangci-lint
+  ruby: rubocop
 ```
 
 Pass the path to this file when invoking `analyze_pr` to customize which
@@ -106,6 +107,14 @@ The bot automatically triggers on:
 - New pull requests
 - Push events to PR branches
 - Review requests
+
+You can also run the analysis manually and post the results to a pull request:
+
+```python
+from autogen_code_review_bot.github_integration import analyze_and_comment
+
+analyze_and_comment('/path/to/repo', 'owner/repo', 123, 'gh-token')
+```
 
 ## Sample Review Output
 
@@ -167,3 +176,5 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for:
 ## License
 
 MIT License - see [LICENSE](LICENSE) file for details.
+
+See [CHANGELOG](CHANGELOG.md) for release history and [CODEOWNERS](.github/CODEOWNERS) for maintainers.
