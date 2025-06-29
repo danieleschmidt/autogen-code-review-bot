@@ -8,7 +8,12 @@ from .agents import (
 )
 from .pr_analysis import PRAnalysisResult, analyze_pr, load_linter_config
 from .language_detection import detect_language
-from .github_integration import get_pull_request_diff, post_comment
+from .github_integration import (
+    get_pull_request_diff,
+    post_comment,
+    analyze_and_comment,
+    format_analysis_result,
+)
 
 __all__ = [
     "AgentConfig",
@@ -23,4 +28,6 @@ __all__ = [
     "load_linter_config",
     "get_pull_request_diff",
     "post_comment",
+    "analyze_and_comment",
+    "format_analysis_result",
 ]

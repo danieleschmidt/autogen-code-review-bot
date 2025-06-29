@@ -9,6 +9,7 @@ EXTENSION_MAP = {
     '.ts': 'typescript',
     '.go': 'go',
     '.rs': 'rust',
+    '.rb': 'ruby',
 }
 
 

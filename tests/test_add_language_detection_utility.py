@@ -10,6 +10,7 @@ from autogen_code_review_bot.language_detection import detect_language
         ("lib.ts", "typescript"),
         ("main.go", "go"),
         ("mod.rs", "rust"),
+        ("tool.rb", "ruby"),
     ],
 )
 def test_detects_known_extensions(filename, expected):
