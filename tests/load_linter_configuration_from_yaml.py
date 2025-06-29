@@ -10,6 +10,7 @@ def test_yaml_parsed(tmp_path):
     assert config["python"] == "mypy"
     assert config["javascript"] == "eslint"
     assert config["typescript"] == "eslint"  # from defaults
+    assert config["ruby"] == "rubocop"  # new default
 
 
 def test_fallback_defaults(tmp_path):
@@ -21,4 +22,5 @@ def test_fallback_defaults(tmp_path):
     assert config["python"] == "flake8"
     # unspecified languages fall back
     assert config["javascript"] == "eslint"
+    assert config["ruby"] == "rubocop"
 
