@@ -12,22 +12,15 @@ import yaml
 
 from .language_detection import detect_language
 from .logging_utils import get_request_logger, RequestContext, timed_operation, MetricsCollector
-
-# Default mapping of languages to linter executables
-DEFAULT_LINTERS: Dict[str, str] = {
-    "python": "ruff",
-    "javascript": "eslint",
-    "typescript": "eslint",
-    "ruby": "rubocop",
-}
+from .config import get_default_linters, get_default_timeout
 
 
 def load_linter_config(config_path: str | Path | None = None) -> Dict[str, str]:
     """Return language→linter mapping loaded from ``config_path``.
 
-    Missing languages fall back to :data:`DEFAULT_LINTERS`.
+    Missing languages fall back to configured default linters.
     """
-    mapping = DEFAULT_LINTERS.copy()
+    mapping = get_default_linters()
     if config_path:
         with open(config_path, "r", encoding="utf-8") as fh:
             data = yaml.safe_load(fh) or {}
@@ -68,13 +61,11 @@ def _detect_repo_languages(repo_path: str | Path) -> Set[str]:
     return languages
 
 
-DEFAULT_TIMEOUT = 30
-
 # Initialize logger
 logger = get_request_logger(__name__)
 
 
-def _run_command(cmd: List[str], cwd: str, timeout: int = DEFAULT_TIMEOUT, context: RequestContext | None = None) -> str:
+def _run_command(cmd: List[str], cwd: str, timeout: int | None = None, context: RequestContext | None = None) -> str:
     """Execute ``cmd`` in ``cwd`` and return combined output.
     
     Security measures:
@@ -97,6 +88,10 @@ def _run_command(cmd: List[str], cwd: str, timeout: int = DEFAULT_TIMEOUT, conte
     # Security: Validate working directory
     if not isinstance(cwd, str) or not cwd.strip():
         raise ValueError("Working directory must be a non-empty string")
+
+    # Use configured default timeout if none provided
+    if timeout is None:
+        timeout = get_default_timeout()
 
     if context:
         logger.debug(

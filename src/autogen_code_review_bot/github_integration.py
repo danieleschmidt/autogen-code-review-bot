@@ -9,8 +9,8 @@ from typing import Any, TYPE_CHECKING
 import requests
 
 from .logging_utils import get_request_logger, RequestContext
+from .config import get_github_api_url, get_http_timeout
 
-API_URL = "https://api.github.com"
 logger = get_request_logger(__name__)
 
 if TYPE_CHECKING:  # pragma: no cover - type checking only
@@ -66,7 +66,7 @@ def _request_with_retries(
                 headers=_headers(token_val),
                 data=data,
                 params=params,
-                timeout=10,
+                timeout=get_http_timeout(),
             )
             resp.raise_for_status()
             
@@ -127,7 +127,7 @@ def get_pull_request_diff(
         pr_number=pr_number
     )
 
-    url = f"{API_URL}/repos/{repo}/pulls/{pr_number}"
+    url = f"{get_github_api_url()}/repos/{repo}/pulls/{pr_number}"
     resp = _request_with_retries(
         "get",
         url,
@@ -166,7 +166,7 @@ def post_comment(
         comment_length=len(body)
     )
 
-    url = f"{API_URL}/repos/{repo}/issues/{pr_number}/comments"
+    url = f"{get_github_api_url()}/repos/{repo}/issues/{pr_number}/comments"
     resp = _request_with_retries(
         "post",
         url,

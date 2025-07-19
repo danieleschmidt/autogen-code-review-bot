@@ -9,6 +9,10 @@ All notable changes to this project will be documented in this file.
 - Prevented potential shell injection vulnerabilities
 
 ### Added  
+- **Configuration management system** following Twelve-Factor App principles
+- **Environment variable support** for all configuration values (AUTOGEN_*)
+- **File-based configuration** with JSON format support  
+- **Configuration validation** with comprehensive error handling
 - **Structured logging system** with JSON output and request correlation IDs
 - **Request context tracking** for correlated logging across operations
 - **Metrics collection** and performance timing for observability
@@ -18,6 +22,8 @@ All notable changes to this project will be documented in this file.
 - Impact-ranked backlog with WSJF scoring methodology
 
 ### Improved
+- **Removed hardcoded values**: GitHub API URL, timeouts, linter mappings now configurable
+- **Enhanced deployment flexibility** with environment-based configuration
 - GitHub integration now includes comprehensive request/response logging
 - PR analysis includes detailed operation logging and metrics
 - Command execution logging for debugging and monitoring

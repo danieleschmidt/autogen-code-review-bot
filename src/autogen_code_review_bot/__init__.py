@@ -14,6 +14,14 @@ from .github_integration import (
     analyze_and_comment,
     format_analysis_result,
 )
+from .config import (
+    Config,
+    load_config,
+    get_github_api_url,
+    get_default_timeout,
+    get_http_timeout,
+    get_default_linters,
+)
 
 __all__ = [
     "AgentConfig",
@@ -30,4 +38,10 @@ __all__ = [
     "post_comment",
     "analyze_and_comment",
     "format_analysis_result",
+    "Config",
+    "load_config",
+    "get_github_api_url",
+    "get_default_timeout",
+    "get_http_timeout",
+    "get_default_linters",
 ]
