@@ -31,6 +31,13 @@ from .metrics import (
     record_operation_metrics,
     with_metrics,
 )
+from .circuit_breaker import (
+    CircuitBreaker,
+    CircuitBreakerConfig,
+    CircuitBreakerError,
+    get_circuit_breaker,
+    get_all_circuit_breaker_stats,
+)
 
 __all__ = [
     "AgentConfig",
@@ -60,4 +67,9 @@ __all__ = [
     "get_metrics_registry",
     "record_operation_metrics",
     "with_metrics",
+    "CircuitBreaker",
+    "CircuitBreakerConfig",
+    "CircuitBreakerError",
+    "get_circuit_breaker",
+    "get_all_circuit_breaker_stats",
 ]
