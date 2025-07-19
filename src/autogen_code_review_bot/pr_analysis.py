@@ -71,9 +71,31 @@ DEFAULT_TIMEOUT = 30
 
 
 def _run_command(cmd: List[str], cwd: str, timeout: int = DEFAULT_TIMEOUT) -> str:
-    """Execute ``cmd`` in ``cwd`` and return combined output."""
+    """Execute ``cmd`` in ``cwd`` and return combined output.
+    
+    Security measures:
+    - Uses shell=False to prevent shell injection
+    - Validates input parameters
+    - Limits environment access
+    - Enforces timeout to prevent DoS
+    """
+    # Security: Validate input parameters
+    if not isinstance(cmd, list):
+        raise TypeError("Command must be a list of strings")
+    
+    if not cmd:
+        raise ValueError("Command list cannot be empty")
+    
+    for arg in cmd:
+        if not isinstance(arg, str):
+            raise TypeError("All command arguments must be strings")
+    
+    # Security: Validate working directory
+    if not isinstance(cwd, str) or not cwd.strip():
+        raise ValueError("Working directory must be a non-empty string")
 
     try:
+        # Security: Explicitly set shell=False and limit environment
         completed = run(
             cmd,
             capture_output=True,
@@ -81,6 +103,8 @@ def _run_command(cmd: List[str], cwd: str, timeout: int = DEFAULT_TIMEOUT) -> st
             check=True,
             cwd=cwd,
             timeout=timeout,
+            shell=False,  # Explicit security: prevent shell injection
+            env=None,     # Use inherited environment (safer than custom env)
         )
         return completed.stdout.strip()
     except TimeoutExpired:

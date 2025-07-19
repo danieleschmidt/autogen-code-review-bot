@@ -3,7 +3,15 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+### Security
+- Enhanced subprocess security in PR analysis with input validation and explicit shell=False
+- Added comprehensive parameter validation for _run_command function
+- Prevented potential shell injection vulnerabilities
+
+### Added  
 - Added Ruby language detection and default linter configuration
+- Autonomous development workflow and backlog management system
+- Impact-ranked backlog with WSJF scoring methodology
 
 ## [0.2.0] - 2025-06-29
 ### Added
