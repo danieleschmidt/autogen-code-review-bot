@@ -10,6 +10,7 @@ import requests
 
 from .logging_utils import get_request_logger, RequestContext
 from .config import get_github_api_url, get_http_timeout
+from .metrics import record_operation_metrics, with_metrics
 
 logger = get_request_logger(__name__)
 
@@ -27,6 +28,7 @@ def _get_token(token: str | None) -> str:
     return final
 
 
+@with_metrics(operation="github_api_request")
 def _request_with_retries(
     method: str,
     url: str,
@@ -41,6 +43,7 @@ def _request_with_retries(
     if context is None:
         context = RequestContext()
         
+    start_time = time.time()
     token_val = _get_token(token)
     
     logger.info(
@@ -75,6 +78,14 @@ def _request_with_retries(
                 context=context,
                 status_code=resp.status_code,
                 attempt=attempt + 1
+            )
+            
+            # Record success metrics
+            record_operation_metrics(
+                operation="github_api_success",
+                duration_ms=(time.time() - start_time) * 1000,
+                status="success",
+                context=context
             )
             
             return resp

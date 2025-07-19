@@ -13,6 +13,7 @@ import yaml
 from .language_detection import detect_language
 from .logging_utils import get_request_logger, RequestContext, timed_operation, MetricsCollector
 from .config import get_default_linters, get_default_timeout
+from .metrics import record_operation_metrics, with_metrics
 
 
 def load_linter_config(config_path: str | Path | None = None) -> Dict[str, str]:
@@ -232,6 +233,7 @@ def _run_performance_checks(repo_path: str, ensure, context: RequestContext | No
     return _run_command(["radon", "cc", "-s", "-a", repo_path], cwd=repo_path, context=context)
 
 
+@with_metrics(operation="pr_analysis")
 @timed_operation(operation="pr_analysis")
 def analyze_pr(repo_path: str, config_path: str | None = None, context: RequestContext | None = None) -> PRAnalysisResult:
     """Run static analysis tools against ``repo_path`` and return the results.

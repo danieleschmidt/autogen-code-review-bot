@@ -22,6 +22,15 @@ from .config import (
     get_http_timeout,
     get_default_linters,
 )
+from .metrics import (
+    MetricsRegistry,
+    Counter,
+    Gauge,
+    Histogram,
+    get_metrics_registry,
+    record_operation_metrics,
+    with_metrics,
+)
 
 __all__ = [
     "AgentConfig",
@@ -44,4 +53,11 @@ __all__ = [
     "get_default_timeout",
     "get_http_timeout",
     "get_default_linters",
+    "MetricsRegistry",
+    "Counter",
+    "Gauge", 
+    "Histogram",
+    "get_metrics_registry",
+    "record_operation_metrics",
+    "with_metrics",
 ]
