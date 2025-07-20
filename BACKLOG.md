@@ -41,7 +41,23 @@
 - **Tests**: Coverage validation tests
 - **Risk**: Medium - CI integration required
 
-### 5. Implement Agent Conversation System (WSJF: 2.0)
+### 5. Add Webhook Event Deduplication (WSJF: 4.0) - NEW
+- **Impact**: 4 (High - prevents duplicate comments, reliability)
+- **Effort**: 1 (Easy - event ID tracking)
+- **Description**: Prevent duplicate PR comments from webhook retries
+- **Files**: New deduplication module, webhook handlers
+- **Tests**: Duplicate event handling tests
+- **Risk**: Low - isolated feature
+
+### 6. Implement Large PR Streaming (WSJF: 3.0) - NEW
+- **Impact**: 3 (Medium - prevents timeouts/OOM)
+- **Effort**: 1 (Easy - chunked processing)
+- **Description**: Handle very large PRs with progressive analysis
+- **Files**: `src/autogen_code_review_bot/pr_analysis.py`
+- **Tests**: Large file handling tests
+- **Risk**: Low - performance optimization
+
+### 7. Implement Agent Conversation System (WSJF: 2.0)
 - **Impact**: 4 (High - core feature enhancement)
 - **Effort**: 2 (Medium - requires agent interaction design)
 - **Description**: Enable agents to discuss and refine feedback
@@ -51,7 +67,23 @@
 
 ## Medium Priority Tasks (WSJF 1.0-2.0)
 
-### 6. Add Metrics Collection (WSJF: 1.5)
+### 8. Add Cache Invalidation Strategy (WSJF: 2.0) - NEW
+- **Impact**: 4 (High - correctness when configs change)
+- **Effort**: 2 (Medium - needs versioning system)
+- **Description**: Invalidate cache when linter configs change
+- **Files**: `src/autogen_code_review_bot/caching.py`
+- **Tests**: Cache invalidation tests
+- **Risk**: Medium - must maintain cache correctness
+
+### 9. Add Monitoring Infrastructure (WSJF: 1.5) - NEW
+- **Impact**: 3 (Medium - operational excellence)
+- **Effort**: 2 (Medium - metrics + health checks)
+- **Description**: Health endpoints, metrics emission, SLI/SLO
+- **Files**: New monitoring module
+- **Tests**: Health check tests
+- **Risk**: Low - additive feature
+
+### 10. Add Metrics Collection (WSJF: 1.5)
 - **Impact**: 3 (Medium - observability)
 - **Effort**: 2 (Medium - needs metrics framework)
 - **Description**: Capture latency, error rate, throughput metrics
@@ -59,7 +91,7 @@
 - **Tests**: Metrics validation
 - **Risk**: Low
 
-### 7. Enhance GitHub Integration Error Handling (WSJF: 1.0)
+### 11. Enhance GitHub Integration Error Handling (WSJF: 1.0)
 - **Impact**: 2 (Low-Medium - reliability)
 - **Effort**: 2 (Medium - requires comprehensive error scenarios)
 - **Description**: Add retries, better error messages, fallback modes
