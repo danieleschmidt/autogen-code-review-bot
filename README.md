@@ -94,8 +94,32 @@ Example usage:
 ```python
 from autogen_code_review_bot import analyze_pr
 
+# Basic analysis with caching enabled (default)
 result = analyze_pr("/path/to/repo", config_path="linters.yaml")
 print(result.style.output)
+
+# Disable caching for fresh analysis
+result = analyze_pr("/path/to/repo", use_cache=False)
+```
+
+### Performance Caching
+
+The bot includes an intelligent caching system that stores linter results by commit hash and configuration. This dramatically improves performance for repeated analyses:
+
+- **Cache Location**: `~/.cache/autogen-review/` (configurable)
+- **Cache Duration**: 24 hours (configurable)
+- **Cache Key**: Based on commit hash + linter configuration hash
+- **Automatic Cleanup**: Expired entries are automatically removed
+
+```python
+from autogen_code_review_bot.caching import LinterCache
+
+# Configure custom cache settings
+cache = LinterCache(cache_dir="/tmp/my-cache", ttl_hours=48)
+
+# Manual cache management
+cache.cleanup()  # Remove expired entries
+cache.clear()    # Remove all entries
 ```
 
 ## Usage Examples
