@@ -6,7 +6,8 @@ from .agents import (
     load_agents_from_yaml,
     run_dual_review,
 )
-from .pr_analysis import PRAnalysisResult, analyze_pr, load_linter_config
+from .models import PRAnalysisResult, AnalysisSection
+from .pr_analysis import analyze_pr, load_linter_config
 from .language_detection import detect_language
 from .github_integration import (
     get_pull_request_diff,
@@ -23,6 +24,7 @@ __all__ = [
     "load_agents_from_yaml",
     "run_dual_review",
     "PRAnalysisResult",
+    "AnalysisSection",
     "analyze_pr",
     "detect_language",
     "load_linter_config",
