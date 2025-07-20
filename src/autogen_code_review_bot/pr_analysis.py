@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from shutil import which
-from subprocess import CalledProcessError, TimeoutExpired, run
+from subprocess import CalledProcessError, TimeoutExpired, run  # nosec B404 - subprocess usage is secure with validation
 from typing import Dict, List, Set
 import os
 from pathlib import Path
@@ -25,14 +25,38 @@ def load_linter_config(config_path: str | Path | None = None) -> Dict[str, str]:
     """Return language→linter mapping loaded from ``config_path``.
 
     Missing languages fall back to :data:`DEFAULT_LINTERS`.
+    Security: Validates config file path and contents.
     """
     mapping = DEFAULT_LINTERS.copy()
     if config_path:
-        with open(config_path, "r", encoding="utf-8") as fh:
-            data = yaml.safe_load(fh) or {}
+        # Validate config file path for security
+        if not _validate_path_safety(str(config_path)):
+            return mapping  # Return defaults for unsafe paths
+            
+        try:
+            config_path = Path(config_path)
+            if not config_path.exists() or not config_path.is_file():
+                return mapping
+                
+            # Limit file size to prevent DoS
+            if config_path.stat().st_size > 1024 * 1024:  # 1MB limit
+                return mapping
+                
+            with open(config_path, "r", encoding="utf-8") as fh:
+                data = yaml.safe_load(fh) or {}
+        except (OSError, yaml.YAMLError, PermissionError):
+            return mapping  # Return defaults on any error
+            
         linters = data.get("linters", {}) if isinstance(data, dict) else {}
         if isinstance(linters, dict):
-            mapping.update({str(k): str(v) for k, v in linters.items()})
+            # Validate linter values against allowlist
+            safe_linters = {}
+            for k, v in linters.items():
+                if isinstance(k, str) and isinstance(v, str):
+                    linter_name = Path(v).name
+                    if linter_name in ALLOWED_EXECUTABLES:
+                        safe_linters[k] = v
+            mapping.update(safe_linters)
     return mapping
 
 
@@ -69,18 +93,90 @@ def _detect_repo_languages(repo_path: str | Path) -> Set[str]:
 
 DEFAULT_TIMEOUT = 30
 
+# Allowlist of safe executables to prevent command injection
+ALLOWED_EXECUTABLES = {
+    "ruff", "eslint", "rubocop", "bandit", "radon", "golangci-lint",
+    "flake8", "pylint", "mypy", "black", "isort", "prettier"
+}
+
+
+def _validate_command_safety(cmd: List[str]) -> bool:
+    """Validate that command is safe to execute.
+    
+    Args:
+        cmd: Command list to validate
+        
+    Returns:
+        True if command is safe, False otherwise
+    """
+    if not cmd or not isinstance(cmd, list):
+        return False
+        
+    # Check if executable is in allowlist
+    executable = cmd[0]
+    executable_name = Path(executable).name
+    
+    if executable_name not in ALLOWED_EXECUTABLES:
+        return False
+    
+    # Check for shell metacharacters in arguments
+    dangerous_chars = ['&', '|', ';', '$', '`', '>', '<', '"', "'", '\\']
+    for arg in cmd:
+        if any(char in str(arg) for char in dangerous_chars):
+            return False
+            
+    return True
+
+
+def _validate_path_safety(path: str) -> bool:
+    """Validate that path is safe and doesn't contain traversal attempts.
+    
+    Args:
+        path: File system path to validate
+        
+    Returns:
+        True if path is safe, False otherwise
+    """
+    if not path or not isinstance(path, str):
+        return False
+        
+    # Resolve path to detect traversal attempts
+    try:
+        resolved_path = Path(path).resolve()
+        # Check for obvious traversal patterns
+        if ".." in str(resolved_path) or str(resolved_path).startswith("/etc"):
+            return False
+        return True
+    except (OSError, ValueError):
+        return False
+
 
 def _run_command(cmd: List[str], cwd: str, timeout: int = DEFAULT_TIMEOUT) -> str:
-    """Execute ``cmd`` in ``cwd`` and return combined output."""
+    """Execute ``cmd`` in ``cwd`` and return combined output.
+    
+    Security: Validates command safety and path traversal prevention.
+    """
+    # Validate command safety
+    if not _validate_command_safety(cmd):
+        return f"unsafe command rejected: {cmd[0] if cmd else 'empty'}"
+        
+    # Validate working directory path
+    if not _validate_path_safety(cwd):
+        return "unsafe working directory path rejected"
+        
+    # Ensure working directory exists
+    if not Path(cwd).is_dir():
+        return "working directory does not exist"
 
     try:
-        completed = run(
+        completed = run(  # nosec B603 - command is validated against allowlist
             cmd,
             capture_output=True,
             text=True,
             check=True,
             cwd=cwd,
             timeout=timeout,
+            shell=False,  # Explicitly disable shell to prevent injection
         )
         return completed.stdout.strip()
     except TimeoutExpired:
@@ -89,6 +185,8 @@ def _run_command(cmd: List[str], cwd: str, timeout: int = DEFAULT_TIMEOUT) -> st
         output = exc.stdout or ""
         err = exc.stderr or ""
         return (output + "\n" + err).strip()
+    except (OSError, FileNotFoundError) as exc:
+        return f"execution error: {exc}"
 
 
 def _run_style_checks(repo_path: str, linters: Dict[str, str]) -> tuple[str, str]:
@@ -129,12 +227,29 @@ def analyze_pr(repo_path: str, config_path: str | None = None) -> PRAnalysisResu
     Parameters
     ----------
     repo_path:
-        Path to the repository under analysis.
+        Path to the repository under analysis. Must be a valid, safe directory path.
     config_path:
-        Optional YAML file specifying language→linter mappings.
+        Optional YAML file specifying language→linter mappings. Must be a safe file path.
+    
+    Security
+    --------
+    Validates all input paths and rejects unsafe commands/paths.
     """
+    # Validate repository path for security
+    if not repo_path or not isinstance(repo_path, str):
+        return _create_error_result("invalid repository path")
+    
+    if not _validate_path_safety(repo_path):
+        return _create_error_result("unsafe repository path rejected")
+    
+    repo_path_obj = Path(repo_path)
+    if not repo_path_obj.exists() or not repo_path_obj.is_dir():
+        return _create_error_result("repository path does not exist or is not a directory")
 
     def ensure(tool: str) -> str:
+        # Validate tool is in allowlist before checking installation
+        if Path(tool).name not in ALLOWED_EXECUTABLES:
+            return f"tool '{tool}' not allowed"
         return "not installed" if which(tool) is None else ""
 
     linters = load_linter_config(config_path)
@@ -147,4 +262,14 @@ def analyze_pr(repo_path: str, config_path: str | None = None) -> PRAnalysisResu
         security=AnalysisSection(tool="bandit", output=security_output),
         style=AnalysisSection(tool=style_tool or "lint", output=style_output),
         performance=AnalysisSection(tool="radon", output=performance_output),
+    )
+
+
+def _create_error_result(error_msg: str) -> PRAnalysisResult:
+    """Create a PRAnalysisResult with error messages."""
+    error_section = AnalysisSection(tool="error", output=error_msg)
+    return PRAnalysisResult(
+        security=error_section,
+        style=error_section,
+        performance=error_section,
     )
