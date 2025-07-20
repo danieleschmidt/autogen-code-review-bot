@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from shutil import which
 from subprocess import CalledProcessError, TimeoutExpired, run  # nosec B404 - subprocess usage is secure with validation
 from typing import Dict, List, Set
@@ -11,6 +10,8 @@ from pathlib import Path
 import yaml
 
 from .language_detection import detect_language
+from .models import AnalysisSection, PRAnalysisResult
+from .caching import LinterCache, get_commit_hash
 
 # Default mapping of languages to linter executables
 DEFAULT_LINTERS: Dict[str, str] = {
@@ -60,21 +61,6 @@ def load_linter_config(config_path: str | Path | None = None) -> Dict[str, str]:
     return mapping
 
 
-@dataclass
-class AnalysisSection:
-    """Individual section of the PR analysis report."""
-
-    tool: str
-    output: str
-
-
-@dataclass
-class PRAnalysisResult:
-    """Container for all analysis sections."""
-
-    security: AnalysisSection
-    style: AnalysisSection
-    performance: AnalysisSection
 
 
 def _detect_repo_languages(repo_path: str | Path) -> Set[str]:
@@ -221,7 +207,7 @@ def _run_performance_checks(repo_path: str, ensure) -> str:
     return ensure("radon") or _run_command(["radon", "cc", "-s", "-a", repo_path], cwd=repo_path)
 
 
-def analyze_pr(repo_path: str, config_path: str | None = None) -> PRAnalysisResult:
+def analyze_pr(repo_path: str, config_path: str | None = None, use_cache: bool = True) -> PRAnalysisResult:
     """Run static analysis tools against ``repo_path`` and return the results.
 
     Parameters
@@ -230,6 +216,8 @@ def analyze_pr(repo_path: str, config_path: str | None = None) -> PRAnalysisResu
         Path to the repository under analysis. Must be a valid, safe directory path.
     config_path:
         Optional YAML file specifying language→linter mappings. Must be a safe file path.
+    use_cache:
+        Whether to use caching for performance optimization. Default: True.
     
     Security
     --------
@@ -246,23 +234,43 @@ def analyze_pr(repo_path: str, config_path: str | None = None) -> PRAnalysisResu
     if not repo_path_obj.exists() or not repo_path_obj.is_dir():
         return _create_error_result("repository path does not exist or is not a directory")
 
+    linters = load_linter_config(config_path)
+    
+    # Try to use cache if enabled
+    cache = None
+    commit_hash = None
+    config_hash = None
+    if use_cache:
+        cache = LinterCache()
+        commit_hash = get_commit_hash(repo_path)
+        if commit_hash:
+            config_hash = cache.get_config_hash(linters)
+            cached_result = cache.get(commit_hash, config_hash)
+            if cached_result:
+                return cached_result
+
     def ensure(tool: str) -> str:
         # Validate tool is in allowlist before checking installation
         if Path(tool).name not in ALLOWED_EXECUTABLES:
             return f"tool '{tool}' not allowed"
         return "not installed" if which(tool) is None else ""
 
-    linters = load_linter_config(config_path)
-
+    # Run analysis
     style_tool, style_output = _run_style_checks(repo_path, linters)
     security_output = _run_security_checks(repo_path, ensure)
     performance_output = _run_performance_checks(repo_path, ensure)
 
-    return PRAnalysisResult(
+    result = PRAnalysisResult(
         security=AnalysisSection(tool="bandit", output=security_output),
         style=AnalysisSection(tool=style_tool or "lint", output=style_output),
         performance=AnalysisSection(tool="radon", output=performance_output),
     )
+    
+    # Cache the result if caching is enabled and we have a commit hash
+    if use_cache and cache and commit_hash and config_hash:
+        cache.set(commit_hash, config_hash, result)
+    
+    return result
 
 
 def _create_error_result(error_msg: str) -> PRAnalysisResult:
