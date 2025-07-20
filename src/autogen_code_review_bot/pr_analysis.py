@@ -8,6 +8,7 @@ from typing import Dict, List, Set
 import os
 from pathlib import Path
 import yaml
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from .language_detection import detect_language
 from .models import AnalysisSection, PRAnalysisResult
@@ -175,25 +176,72 @@ def _run_command(cmd: List[str], cwd: str, timeout: int = DEFAULT_TIMEOUT) -> st
         return f"execution error: {exc}"
 
 
-def _run_style_checks(repo_path: str, linters: Dict[str, str]) -> tuple[str, str]:
-    """Return style tool label and output for ``repo_path``."""
-
+def _run_single_linter(lang: str, tool: str, repo_path: str) -> tuple[str, str]:
+    """Run a single linter for a language and return (tool_name, output)."""
     def ensure(tool: str) -> str:
         return "not installed" if which(tool) is None else ""
+    
+    if not tool:
+        return "", ""
+    
+    cmd = [tool]
+    if tool == "ruff":
+        cmd.append("check")
+    cmd.append(repo_path)
+    output = ensure(tool) or _run_command(cmd, cwd=repo_path)
+    return tool, output
 
+
+def _run_style_checks(repo_path: str, linters: Dict[str, str]) -> tuple[str, str]:
+    """Return style tool label and output for ``repo_path`` (sequential version)."""
+    return _run_style_checks_parallel(repo_path, linters, max_workers=1)
+
+
+def _run_style_checks_parallel(repo_path: str, linters: Dict[str, str], max_workers: int = 3) -> tuple[str, str]:
+    """Return style tool label and output for ``repo_path`` with parallel execution."""
     languages = _detect_repo_languages(repo_path)
-    style_sections: List[tuple[str, str]] = []
+    
+    # Prepare tasks for parallel execution
+    tasks = []
     for lang in sorted(languages):
         tool = linters.get(lang)
-        if not tool:
-            continue
-        cmd = [tool]
-        if tool == "ruff":
-            cmd.append("check")
-        cmd.append(repo_path)
-        output = ensure(tool) or _run_command(cmd, cwd=repo_path)
-        style_sections.append((tool, output))
-
+        if tool:
+            tasks.append((lang, tool))
+    
+    if not tasks:
+        return "", ""
+    
+    style_sections: List[tuple[str, str]] = []
+    
+    if max_workers == 1:
+        # Sequential execution for compatibility
+        for lang, tool in tasks:
+            result = _run_single_linter(lang, tool, repo_path)
+            if result[0]:  # Only add if tool name is not empty
+                style_sections.append(result)
+    else:
+        # Parallel execution
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Submit all tasks
+            future_to_task = {
+                executor.submit(_run_single_linter, lang, tool, repo_path): (lang, tool)
+                for lang, tool in tasks
+            }
+            
+            # Collect results as they complete
+            for future in as_completed(future_to_task):
+                try:
+                    tool_name, output = future.result()
+                    if tool_name:  # Only add if tool name is not empty
+                        style_sections.append((tool_name, output))
+                except Exception as exc:
+                    lang, tool = future_to_task[future]
+                    # Log error but continue with other tools
+                    style_sections.append((tool, f"execution error: {exc}"))
+    
+    # Sort results for consistent output
+    style_sections.sort(key=lambda x: x[0])
+    
     style_tool = "+".join(name for name, _ in style_sections) or ""
     style_output = "\n".join(f"{name}:\n{out}" for name, out in style_sections)
     return style_tool, style_output
@@ -207,7 +255,48 @@ def _run_performance_checks(repo_path: str, ensure) -> str:
     return ensure("radon") or _run_command(["radon", "cc", "-s", "-a", repo_path], cwd=repo_path)
 
 
-def analyze_pr(repo_path: str, config_path: str | None = None, use_cache: bool = True) -> PRAnalysisResult:
+def _run_all_checks_parallel(repo_path: str, linters: Dict[str, str]) -> PRAnalysisResult:
+    """Run all analysis checks (security, style, performance) in parallel."""
+    def ensure(tool: str) -> str:
+        # Validate tool is in allowlist before checking installation
+        if Path(tool).name not in ALLOWED_EXECUTABLES:
+            return f"tool '{tool}' not allowed"
+        return "not installed" if which(tool) is None else ""
+    
+    # Define check functions
+    def run_security():
+        return _run_security_checks(repo_path, ensure)
+    
+    def run_style():
+        return _run_style_checks_parallel(repo_path, linters, max_workers=3)
+    
+    def run_performance():
+        return _run_performance_checks(repo_path, ensure)
+    
+    # Execute all checks in parallel
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        # Submit all tasks
+        security_future = executor.submit(run_security)
+        style_future = executor.submit(run_style)
+        performance_future = executor.submit(run_performance)
+        
+        # Collect results
+        try:
+            security_output = security_future.result()
+            style_tool, style_output = style_future.result()
+            performance_output = performance_future.result()
+        except Exception as exc:
+            # If any check fails, return error result
+            return _create_error_result(f"parallel execution error: {exc}")
+    
+    return PRAnalysisResult(
+        security=AnalysisSection(tool="bandit", output=security_output),
+        style=AnalysisSection(tool=style_tool or "lint", output=style_output),
+        performance=AnalysisSection(tool="radon", output=performance_output),
+    )
+
+
+def analyze_pr(repo_path: str, config_path: str | None = None, use_cache: bool = True, use_parallel: bool = True) -> PRAnalysisResult:
     """Run static analysis tools against ``repo_path`` and return the results.
 
     Parameters
@@ -218,6 +307,8 @@ def analyze_pr(repo_path: str, config_path: str | None = None, use_cache: bool =
         Optional YAML file specifying language→linter mappings. Must be a safe file path.
     use_cache:
         Whether to use caching for performance optimization. Default: True.
+    use_parallel:
+        Whether to use parallel execution for better performance. Default: True.
     
     Security
     --------
@@ -249,22 +340,26 @@ def analyze_pr(repo_path: str, config_path: str | None = None, use_cache: bool =
             if cached_result:
                 return cached_result
 
-    def ensure(tool: str) -> str:
-        # Validate tool is in allowlist before checking installation
-        if Path(tool).name not in ALLOWED_EXECUTABLES:
-            return f"tool '{tool}' not allowed"
-        return "not installed" if which(tool) is None else ""
+    # Run analysis - use parallel execution if enabled
+    if use_parallel:
+        result = _run_all_checks_parallel(repo_path, linters)
+    else:
+        # Sequential execution (original implementation)
+        def ensure(tool: str) -> str:
+            # Validate tool is in allowlist before checking installation
+            if Path(tool).name not in ALLOWED_EXECUTABLES:
+                return f"tool '{tool}' not allowed"
+            return "not installed" if which(tool) is None else ""
 
-    # Run analysis
-    style_tool, style_output = _run_style_checks(repo_path, linters)
-    security_output = _run_security_checks(repo_path, ensure)
-    performance_output = _run_performance_checks(repo_path, ensure)
+        style_tool, style_output = _run_style_checks(repo_path, linters)
+        security_output = _run_security_checks(repo_path, ensure)
+        performance_output = _run_performance_checks(repo_path, ensure)
 
-    result = PRAnalysisResult(
-        security=AnalysisSection(tool="bandit", output=security_output),
-        style=AnalysisSection(tool=style_tool or "lint", output=style_output),
-        performance=AnalysisSection(tool="radon", output=performance_output),
-    )
+        result = PRAnalysisResult(
+            security=AnalysisSection(tool="bandit", output=security_output),
+            style=AnalysisSection(tool=style_tool or "lint", output=style_output),
+            performance=AnalysisSection(tool="radon", output=performance_output),
+        )
     
     # Cache the result if caching is enabled and we have a commit hash
     if use_cache and cache and commit_hash and config_hash:
