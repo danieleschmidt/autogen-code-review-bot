@@ -21,14 +21,14 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 from autogen_code_review_bot.pr_analysis import analyze_pr
 from autogen_code_review_bot.github_integration import analyze_and_comment
-
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+from autogen_code_review_bot.logging_config import (
+    configure_logging, get_logger, set_request_id, 
+    log_operation_start, log_operation_end, ContextLogger
 )
-logger = logging.getLogger(__name__)
+
+# Configure structured logging
+configure_logging(level="INFO", service_name="autogen-code-review-bot")
+logger = get_logger(__name__)
 
 
 class Config:
@@ -90,29 +90,51 @@ class WebhookHandler(BaseHTTPRequestHandler):
     
     def do_POST(self):
         """Handle incoming webhook POST requests."""
+        # Generate request ID for this webhook request
+        request_id = set_request_id()
+        
+        # Create context logger for this request
+        req_logger = ContextLogger(logger, request_id=request_id, endpoint=self.path)
+        
         if self.path != "/webhook":
+            req_logger.warning("Invalid endpoint requested", endpoint=self.path)
             self.send_error(404, "Not Found")
             return
+        
+        # Start operation tracking
+        operation_context = log_operation_start(
+            logger, 
+            "webhook_request",
+            request_id=request_id,
+            client_ip=self.client_address[0],
+            user_agent=self.headers.get('User-Agent', 'unknown')
+        )
         
         try:
             # Read request body
             content_length = int(self.headers.get('Content-Length', 0))
             body = self.rfile.read(content_length)
             
+            req_logger.debug("Webhook request received", content_length=content_length)
+            
             # Verify webhook signature
             if not self._verify_signature(body):
+                req_logger.warning("Webhook signature verification failed")
                 self.send_error(401, "Unauthorized")
+                log_operation_end(logger, operation_context, success=False, error="signature_verification_failed")
                 return
             
             # Parse JSON payload
             try:
                 payload = json.loads(body.decode('utf-8'))
-            except json.JSONDecodeError:
+            except json.JSONDecodeError as e:
+                req_logger.error("Invalid JSON payload", error=str(e))
                 self.send_error(400, "Invalid JSON")
+                log_operation_end(logger, operation_context, success=False, error="invalid_json")
                 return
             
             # Process webhook event
-            self._process_webhook(payload)
+            self._process_webhook(payload, req_logger)
             
             # Send success response
             self.send_response(200)
@@ -120,20 +142,21 @@ class WebhookHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(b'{"status": "success"}')
             
+            log_operation_end(logger, operation_context, success=True)
+            
         except Exception as e:
-            logger.error(f"Webhook processing error: {e}")
+            req_logger.error("Webhook processing error", error=str(e), error_type=type(e).__name__)
             self.send_error(500, "Internal Server Error")
+            log_operation_end(logger, operation_context, success=False, error=str(e))
     
     def _verify_signature(self, body: bytes) -> bool:
         """Verify GitHub webhook signature."""
         signature = self.headers.get('X-Hub-Signature-256')
         if not signature:
-            logger.warning("Missing webhook signature")
             return False
         
         webhook_secret = self.config.get('github.webhook_secret')
         if not webhook_secret:
-            logger.warning("No webhook secret configured")
             return False
         
         expected_signature = 'sha256=' + hmac.new(
@@ -144,48 +167,99 @@ class WebhookHandler(BaseHTTPRequestHandler):
         
         return hmac.compare_digest(signature, expected_signature)
     
-    def _process_webhook(self, payload: Dict[str, Any]) -> None:
+    def _process_webhook(self, payload: Dict[str, Any], req_logger: ContextLogger) -> None:
         """Process GitHub webhook payload."""
         event_type = self.headers.get('X-GitHub-Event')
         action = payload.get('action')
         
-        logger.info(f"Received {event_type} event with action: {action}")
+        req_logger.info("Webhook event received", 
+                       event_type=event_type, 
+                       action=action,
+                       repository=payload.get('repository', {}).get('full_name'))
         
         # Handle pull request events
         if event_type == 'pull_request' and action in ['opened', 'synchronize', 'reopened']:
-            self._handle_pr_event(payload)
+            self._handle_pr_event(payload, req_logger)
         else:
-            logger.info(f"Ignoring {event_type}:{action} event")
+            req_logger.info("Ignoring webhook event", 
+                          event_type=event_type, 
+                          action=action,
+                          reason="not_a_relevant_pr_event")
     
-    def _handle_pr_event(self, payload: Dict[str, Any]) -> None:
+    def _handle_pr_event(self, payload: Dict[str, Any], req_logger: ContextLogger) -> None:
         """Handle pull request webhook events."""
         try:
             repo_full_name = payload['repository']['full_name']
             pr_number = payload['number']
+            pr_head_sha = payload['pull_request']['head']['sha']
             
-            logger.info(f"Processing PR #{pr_number} for {repo_full_name}")
+            # Create PR-specific context logger
+            pr_logger = ContextLogger(
+                logger, 
+                repository=repo_full_name,
+                pr_number=pr_number,
+                head_sha=pr_head_sha[:8]  # Short SHA for readability
+            )
+            
+            # Start PR processing operation
+            pr_context = log_operation_start(
+                logger, 
+                "pr_analysis",
+                repository=repo_full_name,
+                pr_number=pr_number,
+                head_sha=pr_head_sha
+            )
+            
+            pr_logger.info("Starting PR analysis")
             
             # Clone repository temporarily and analyze
             with tempfile.TemporaryDirectory() as temp_dir:
-                repo_path = self._clone_repository(payload['repository'], temp_dir)
+                repo_path = self._clone_repository(payload['repository'], temp_dir, pr_logger)
                 if repo_path:
-                    # Run analysis and post comment
-                    analyze_and_comment(repo_path, repo_full_name, pr_number)
-                    logger.info(f"Analysis completed for PR #{pr_number}")
+                    try:
+                        # Run analysis and post comment
+                        analyze_and_comment(repo_path, repo_full_name, pr_number)
+                        pr_logger.info("PR analysis completed successfully")
+                        log_operation_end(logger, pr_context, success=True)
+                    except Exception as analysis_error:
+                        pr_logger.error("Analysis failed", error=str(analysis_error))
+                        log_operation_end(logger, pr_context, success=False, error=str(analysis_error))
+                        raise
                 else:
-                    logger.error(f"Failed to clone repository {repo_full_name}")
+                    error_msg = f"Failed to clone repository {repo_full_name}"
+                    pr_logger.error("Repository clone failed")
+                    log_operation_end(logger, pr_context, success=False, error="clone_failed")
+                    raise RuntimeError(error_msg)
                     
         except KeyError as e:
-            logger.error(f"Missing required field in webhook payload: {e}")
+            req_logger.error("Missing required field in webhook payload", 
+                           missing_field=str(e), 
+                           available_keys=list(payload.keys()))
+            raise
         except Exception as e:
-            logger.error(f"Error processing PR event: {e}")
+            req_logger.error("Error processing PR event", 
+                           error=str(e), 
+                           error_type=type(e).__name__)
+            raise
     
-    def _clone_repository(self, repo_info: Dict[str, Any], temp_dir: str) -> Optional[str]:
+    def _clone_repository(self, repo_info: Dict[str, Any], temp_dir: str, 
+                         pr_logger: ContextLogger) -> Optional[str]:
         """Clone repository to temporary directory."""
+        clone_context = log_operation_start(
+            logger,
+            "git_clone",
+            repository=repo_info.get('full_name'),
+            clone_url=repo_info.get('clone_url', '').replace(self.config.get('github.bot_token', ''), '***')
+        )
+        
         try:
             clone_url = repo_info['clone_url']
             repo_name = repo_info['name']
             repo_path = Path(temp_dir) / repo_name
+            
+            pr_logger.debug("Starting repository clone", 
+                          repo_name=repo_name,
+                          temp_dir=temp_dir)
             
             # Use GitHub token for private repos if available
             token = self.config.get('github.bot_token')
@@ -205,21 +279,37 @@ class WebhookHandler(BaseHTTPRequestHandler):
             )
             
             if result.returncode == 0:
+                pr_logger.info("Repository cloned successfully", 
+                             repo_path=str(repo_path),
+                             clone_depth=1)
+                log_operation_end(logger, clone_context, success=True, repo_path=str(repo_path))
                 return str(repo_path)
             else:
-                logger.error(f"Git clone failed: {result.stderr}")
+                pr_logger.error("Git clone command failed", 
+                              return_code=result.returncode,
+                              stderr=result.stderr)
+                log_operation_end(logger, clone_context, success=False, error=result.stderr)
                 return None
                 
         except subprocess.TimeoutExpired:
-            logger.error("Git clone timed out")
+            pr_logger.error("Git clone operation timed out", timeout_seconds=60)
+            log_operation_end(logger, clone_context, success=False, error="timeout")
             return None
         except Exception as e:
-            logger.error(f"Clone error: {e}")
+            pr_logger.error("Clone operation failed", 
+                          error=str(e), 
+                          error_type=type(e).__name__)
+            log_operation_end(logger, clone_context, success=False, error=str(e))
             return None
     
     def log_message(self, format, *args):
         """Override to use our logger instead of stderr."""
-        logger.info(f"{self.address_string()} - {format % args}")
+        # Use structured logging for HTTP server messages
+        message = format % args
+        logger.info("HTTP request", 
+                   client_address=self.address_string(),
+                   message=message,
+                   component="http_server")
 
 
 def create_webhook_handler(config: Config):
@@ -236,37 +326,59 @@ def run_server(config: Config) -> None:
     
     # Validate required configuration
     if not config.get('github.webhook_secret'):
-        logger.error("GITHUB_WEBHOOK_SECRET environment variable is required")
+        logger.error("Missing required configuration", 
+                    missing_config="GITHUB_WEBHOOK_SECRET",
+                    component="server_startup")
         sys.exit(1)
     
     if not config.get('github.bot_token'):
-        logger.error("GITHUB_TOKEN environment variable is required")
+        logger.error("Missing required configuration", 
+                    missing_config="GITHUB_TOKEN",
+                    component="server_startup")
         sys.exit(1)
     
     # Create and start server
     handler_class = create_webhook_handler(config)
     server = HTTPServer((host, port), handler_class)
     
-    logger.info(f"Starting webhook server on {host}:{port}")
-    logger.info("Webhook endpoint: /webhook")
+    logger.info("Starting webhook server", 
+               host=host, 
+               port=port,
+               webhook_endpoint="/webhook",
+               component="server_startup")
     
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        logger.info("Shutting down server...")
+        logger.info("Server shutdown requested", component="server_shutdown")
         server.shutdown()
 
 
 def manual_analysis(repo_path: str, config_path: Optional[str] = None) -> None:
     """Run manual analysis on a local repository."""
     if not Path(repo_path).is_dir():
-        logger.error(f"Repository path does not exist: {repo_path}")
+        logger.error("Repository path does not exist", 
+                    repo_path=repo_path,
+                    component="manual_analysis")
         sys.exit(1)
     
-    logger.info(f"Running analysis on {repo_path}")
+    # Start manual analysis operation
+    analysis_context = log_operation_start(
+        logger,
+        "manual_analysis",
+        repo_path=repo_path,
+        config_path=config_path
+    )
+    
+    logger.info("Starting manual repository analysis", repo_path=repo_path)
     
     try:
         result = analyze_pr(repo_path, config_path)
+        
+        logger.info("Manual analysis completed successfully",
+                   security_tool=result.security.tool,
+                   style_tool=result.style.tool,
+                   performance_tool=result.performance.tool)
         
         # Print results
         print("\\n=== AutoGen Code Review Results ===\\n")
@@ -283,8 +395,13 @@ def manual_analysis(repo_path: str, config_path: Optional[str] = None) -> None:
         print(result.performance.output or "No issues found")
         print()
         
+        log_operation_end(logger, analysis_context, success=True)
+        
     except Exception as e:
-        logger.error(f"Analysis failed: {e}")
+        logger.error("Manual analysis failed", 
+                    error=str(e),
+                    error_type=type(e).__name__)
+        log_operation_end(logger, analysis_context, success=False, error=str(e))
         sys.exit(1)
 
 
@@ -338,9 +455,9 @@ Examples:
     
     args = parser.parse_args()
     
-    # Set log level
-    if args.verbose:
-        logging.getLogger().setLevel(logging.DEBUG)
+    # Configure logging level
+    log_level = "DEBUG" if args.verbose else "INFO"
+    configure_logging(level=log_level, service_name="autogen-code-review-bot")
     
     # Load configuration
     config = Config(args.config)
