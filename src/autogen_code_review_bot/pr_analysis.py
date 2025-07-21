@@ -741,7 +741,6 @@ def format_analysis_result(result: PRAnalysisResult) -> str:
     
     return "\n\n".join(sections)
 
-
 def _create_error_result(error_msg: str) -> PRAnalysisResult:
     """Create a PRAnalysisResult with error messages."""
     error_section = AnalysisSection(tool="error", output=error_msg)
