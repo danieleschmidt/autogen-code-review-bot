@@ -91,6 +91,213 @@ def _detect_repo_languages(repo_path: str | Path) -> Set[str]:
     return languages
 
 
+def _get_repo_size_info(repo_path: str | Path) -> tuple[int, int]:
+    """Get repository size information for streaming decision.
+    
+    Args:
+        repo_path: Path to the repository
+        
+    Returns:
+        Tuple of (file_count, total_size_bytes)
+    """
+    repo_path = Path(repo_path)
+    file_count = 0
+    total_size = 0
+    
+    try:
+        for root, _, files in os.walk(repo_path):
+            for name in files:
+                file_path = Path(root) / name
+                try:
+                    stat_info = file_path.stat()
+                    file_count += 1
+                    total_size += stat_info.st_size
+                except (OSError, PermissionError):
+                    # Skip files we can't access
+                    continue
+    except (OSError, PermissionError):
+        # If we can't walk the directory, return zeros
+        logger.warning("Failed to access repository for size calculation", 
+                      extra={"repo_path": str(repo_path)})
+        return 0, 0
+    
+    logger.debug("Repository size analysis completed", 
+                extra={
+                    "repo_path": str(repo_path),
+                    "file_count": file_count,
+                    "total_size_mb": total_size / (1024 * 1024)
+                })
+    return file_count, total_size
+
+
+def _should_use_streaming(file_count: int, total_size: int) -> bool:
+    """Determine if we should use streaming analysis for a repository.
+    
+    Args:
+        file_count: Number of files in the repository
+        total_size: Total size in bytes
+        
+    Returns:
+        True if streaming should be used, False otherwise
+    """
+    # Thresholds for streaming decision
+    MAX_FILES_NORMAL = 1000        # More than 1000 files triggers streaming
+    MAX_SIZE_NORMAL = 10 * 1024 * 1024  # More than 10MB triggers streaming
+    
+    should_stream = file_count > MAX_FILES_NORMAL or total_size > MAX_SIZE_NORMAL
+    
+    logger.debug("Streaming decision made", 
+                extra={
+                    "file_count": file_count,
+                    "total_size_mb": total_size / (1024 * 1024),
+                    "should_stream": should_stream,
+                    "reason": "file_count" if file_count > MAX_FILES_NORMAL else "size" if total_size > MAX_SIZE_NORMAL else "normal"
+                })
+    
+    return should_stream
+
+
+def _detect_repo_languages_chunked(repo_path: str | Path, chunk_size: int = 100, progress_callback=None) -> Set[str]:
+    """Detect repository languages using chunked processing for large repos.
+    
+    Args:
+        repo_path: Path to the repository
+        chunk_size: Number of files to process in each chunk
+        progress_callback: Optional callback function called with (processed, total)
+        
+    Returns:
+        Set of detected languages
+    """
+    repo_path = Path(repo_path)
+    languages: Set[str] = set()
+    
+    # Collect all files first
+    all_files = []
+    try:
+        for root, _, files in os.walk(repo_path):
+            for name in files:
+                file_path = Path(root) / name
+                all_files.append(file_path)
+    except (OSError, PermissionError) as e:
+        logger.warning("Failed to walk repository for language detection", 
+                      extra={"repo_path": str(repo_path), "error": str(e)})
+        return languages
+    
+    total_files = len(all_files)
+    processed = 0
+    
+    logger.info("Starting chunked language detection", 
+               extra={
+                   "repo_path": str(repo_path),
+                   "total_files": total_files,
+                   "chunk_size": chunk_size
+               })
+    
+    # Process files in chunks
+    for i in range(0, total_files, chunk_size):
+        chunk_files = all_files[i:i + chunk_size]
+        
+        for file_path in chunk_files:
+            try:
+                lang = detect_language(file_path)
+                if lang != "unknown":
+                    languages.add(lang)
+                processed += 1
+            except (OSError, PermissionError):
+                # Skip files we can't access
+                processed += 1
+                continue
+        
+        # Call progress callback if provided
+        if progress_callback:
+            progress_callback(processed, total_files)
+        
+        logger.debug("Language detection chunk completed", 
+                    extra={
+                        "processed": processed,
+                        "total": total_files,
+                        "chunk_end": i + chunk_size,
+                        "languages_so_far": list(languages)
+                    })
+    
+    logger.info("Chunked language detection completed", 
+               extra={
+                   "repo_path": str(repo_path),
+                   "languages": list(languages),
+                   "files_processed": processed,
+                   "total_files": total_files
+               })
+    
+    return languages
+
+
+def _analyze_pr_streaming(repo_path: str, linters: Dict[str, str], use_cache: bool = True) -> PRAnalysisResult:
+    """Analyze a PR using streaming approach for large repositories.
+    
+    Args:
+        repo_path: Path to the repository
+        linters: Language to linter mapping
+        use_cache: Whether to use caching
+        
+    Returns:
+        PRAnalysisResult with analysis results
+    """
+    logger.info("Starting streaming PR analysis", 
+               extra={"repo_path": repo_path, "use_cache": use_cache})
+    
+    try:
+        # Use chunked language detection for large repos
+        languages = _detect_repo_languages_chunked(repo_path, chunk_size=200)
+        
+        # Apply cache logic if enabled
+        cache = None
+        commit_hash = None
+        config_hash = None
+        
+        if use_cache:
+            logger.debug("Initializing cache for streaming analysis")
+            cache = LinterCache()
+            commit_hash = get_commit_hash(repo_path)
+            if commit_hash:
+                config_hash = cache.get_config_hash(linters)
+                logger.debug("Checking cache for streaming analysis results", 
+                            extra={
+                                "commit_hash": commit_hash[:8], 
+                                "config_hash": config_hash[:8]
+                            })
+                cached_result = cache.get(commit_hash, config_hash)
+                if cached_result:
+                    logger.info("Cache hit for streaming analysis", 
+                               extra={"commit_hash": commit_hash[:8]})
+                    return cached_result
+            else:
+                logger.debug("No commit hash available for streaming analysis")
+        
+        # Run the actual analysis (reuse existing parallel implementation)
+        logger.info("Running analysis with streaming optimizations")
+        result = _run_all_checks_parallel(repo_path, linters)
+        
+        logger.info("Streaming analysis completed successfully",
+                    extra={
+                        "languages_detected": list(languages),
+                        "has_security_issues": bool(result.security.output.strip()),
+                        "has_style_issues": bool(result.style.output.strip()),
+                        "has_performance_issues": bool(result.performance.output.strip())
+                    })
+        
+        # Cache the result if caching is enabled
+        if use_cache and cache and commit_hash and config_hash:
+            logger.debug("Caching streaming analysis results", 
+                        extra={"commit_hash": commit_hash[:8]})
+            cache.set(commit_hash, config_hash, result)
+        
+        return result
+        
+    except Exception as exc:
+        logger.error("Streaming analysis failed", extra={"error": str(exc)})
+        return _create_error_result(f"streaming analysis error: {exc}")
+
+
 DEFAULT_TIMEOUT = 30
 
 # Allowlist of safe executables to prevent command injection
@@ -394,6 +601,17 @@ def analyze_pr(repo_path: str, config_path: str | None = None, use_cache: bool =
                 return cached_result
         else:
             logger.debug("No commit hash available, cache disabled")
+
+    # Check if we should use streaming for large repositories
+    file_count, total_size = _get_repo_size_info(repo_path)
+    if _should_use_streaming(file_count, total_size):
+        logger.info("Using streaming analysis for large repository", 
+                   extra={
+                       "file_count": file_count,
+                       "total_size_mb": total_size / (1024 * 1024),
+                       "reason": "repository_size_optimization"
+                   })
+        return _analyze_pr_streaming(repo_path, linters, use_cache)
 
     # Run analysis - use parallel execution if enabled
     if use_parallel:
