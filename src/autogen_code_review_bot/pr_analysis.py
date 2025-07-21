@@ -14,6 +14,7 @@ from .language_detection import detect_language
 from .models import AnalysisSection, PRAnalysisResult
 from .caching import LinterCache, get_commit_hash, InvalidationStrategy
 from .logging_config import get_logger
+from .agent_conversations import conduct_agent_discussion, RefinementCriteria
 
 # Default mapping of languages to linter executables
 DEFAULT_LINTERS: Dict[str, str] = {
@@ -663,6 +664,225 @@ def analyze_pr(repo_path: str, config_path: str | None = None, use_cache: bool =
         cache.set(commit_hash, config_hash, result)
     
     return result
+
+
+def analyze_pr_with_conversations(
+    repo_path: str, 
+    config_path: str | None = None, 
+    use_cache: bool = True, 
+    use_parallel: bool = True,
+    enable_conversations: bool = False,
+    conversation_rounds: int = 2
+) -> PRAnalysisResult:
+    """Analyze PR with optional agent conversations for enhanced review quality.
+    
+    This function extends the basic PR analysis with agent conversations,
+    allowing multiple AI agents to discuss and refine their feedback.
+    
+    Parameters
+    ----------
+    repo_path:
+        Path to the repository under analysis.
+    config_path:
+        Optional YAML file specifying linter and agent configurations.
+    use_cache:
+        Whether to use caching for performance optimization.
+    use_parallel:
+        Whether to use parallel execution.
+    enable_conversations:
+        Whether to enable agent conversations for refinement.
+    conversation_rounds:
+        Maximum rounds of agent discussion (default: 2).
+    
+    Returns
+    -------
+    PRAnalysisResult:
+        Analysis results, potentially enhanced with agent discussions.
+    """
+    logger.info("Starting PR analysis with conversation capability", 
+                extra={
+                    "repo_path": repo_path,
+                    "enable_conversations": enable_conversations,
+                    "conversation_rounds": conversation_rounds
+                })
+    
+    # Run standard PR analysis first
+    result = analyze_pr(repo_path, config_path, use_cache, use_parallel)
+    
+    # If conversations are disabled or we have errors, return standard result
+    if not enable_conversations or not config_path:
+        logger.debug("Agent conversations disabled or no config provided")
+        return result
+    
+    # Check if there are significant issues that warrant agent discussion
+    has_issues = any([
+        result.security.output.strip(),
+        result.style.output.strip(), 
+        result.performance.output.strip()
+    ])
+    
+    if not has_issues:
+        logger.info("No significant issues found, skipping agent conversations")
+        return result
+    
+    # Prepare code snippet for discussion (use problematic files)
+    code_snippet = _extract_problematic_code(repo_path, result)
+    
+    if not code_snippet:
+        logger.debug("No specific code issues to discuss")
+        return result
+    
+    try:
+        # Conduct agent discussion
+        logger.info("Starting agent conversation for code refinement",
+                   extra={"code_length": len(code_snippet)})
+        
+        criteria = RefinementCriteria(
+            max_rounds=conversation_rounds,
+            consensus_threshold=0.7,
+            timeout_seconds=120.0  # 2 minutes for practical usage
+        )
+        
+        discussion_result = conduct_agent_discussion(
+            code_snippet=code_snippet,
+            config_path=config_path,
+            max_rounds=conversation_rounds,
+            criteria=criteria
+        )
+        
+        if discussion_result.consensus_reached and discussion_result.final_messages:
+            logger.info("Agent conversation completed with consensus",
+                       extra={
+                           "round_count": discussion_result.round_count,
+                           "confidence": discussion_result.confidence_score
+                       })
+            
+            # Enhance results with conversation insights
+            enhanced_result = _integrate_conversation_results(result, discussion_result)
+            return enhanced_result
+        else:
+            logger.info("Agent conversation completed without strong consensus",
+                       extra={"round_count": discussion_result.round_count})
+    
+    except Exception as e:
+        logger.warning("Agent conversation failed, falling back to standard analysis",
+                      extra={"error": str(e)})
+    
+    return result
+
+
+def _extract_problematic_code(repo_path: str, analysis_result: PRAnalysisResult) -> str:
+    """Extract code snippets that have analysis issues for agent discussion."""
+    problematic_files = []
+    
+    # Parse linter outputs to find specific files with issues
+    outputs = [
+        analysis_result.security.output,
+        analysis_result.style.output,
+        analysis_result.performance.output
+    ]
+    
+    for output in outputs:
+        if not output.strip():
+            continue
+            
+        # Look for file paths in the output (basic heuristic)
+        lines = output.split('\n')
+        for line in lines:
+            if ':' in line and ('/' in line or '\\' in line):
+                # Extract potential file path
+                parts = line.split(':')
+                if parts:
+                    potential_path = parts[0].strip()
+                    full_path = Path(repo_path) / potential_path
+                    if full_path.exists() and full_path.is_file():
+                        problematic_files.append(str(full_path))
+    
+    if not problematic_files:
+        # Fallback: use first Python file found
+        repo_path_obj = Path(repo_path)
+        python_files = list(repo_path_obj.glob('**/*.py'))
+        if python_files:
+            problematic_files = [str(python_files[0])]
+    
+    # Read and combine code from problematic files (limited size)
+    code_snippets = []
+    total_length = 0
+    max_code_length = 2000  # Limit for practical agent discussion
+    
+    for file_path in problematic_files[:3]:  # Max 3 files
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+                if total_length + len(content) > max_code_length:
+                    remaining = max_code_length - total_length
+                    content = content[:remaining] + "\n... (truncated)"
+                
+                code_snippets.append(f"# File: {Path(file_path).name}\n{content}")
+                total_length += len(content)
+                
+                if total_length >= max_code_length:
+                    break
+                    
+        except (IOError, UnicodeDecodeError) as e:
+            logger.debug(f"Could not read file {file_path}: {e}")
+            continue
+    
+    return '\n\n'.join(code_snippets) if code_snippets else ""
+
+
+def _integrate_conversation_results(
+    analysis_result: PRAnalysisResult, 
+    discussion_result
+) -> PRAnalysisResult:
+    """Integrate agent conversation results into the analysis result."""
+    
+    # Create enhanced sections with agent insights
+    conversation_summary = _format_conversation_summary(discussion_result)
+    
+    # Add conversation insights to each section
+    enhanced_security = AnalysisSection(
+        tool=f"{analysis_result.security.tool} + agents",
+        output=f"{analysis_result.security.output}\n\n--- Agent Discussion ---\n{conversation_summary}"
+    )
+    
+    enhanced_style = AnalysisSection(
+        tool=f"{analysis_result.style.tool} + agents", 
+        output=f"{analysis_result.style.output}\n\n--- Agent Discussion ---\n{conversation_summary}"
+    )
+    
+    enhanced_performance = AnalysisSection(
+        tool=f"{analysis_result.performance.tool} + agents",
+        output=f"{analysis_result.performance.output}\n\n--- Agent Discussion ---\n{conversation_summary}"
+    )
+    
+    return PRAnalysisResult(
+        security=enhanced_security,
+        style=enhanced_style,
+        performance=enhanced_performance
+    )
+
+
+def _format_conversation_summary(discussion_result) -> str:
+    """Format the agent conversation results for display."""
+    if not discussion_result.final_messages:
+        return "No agent discussion messages available."
+    
+    summary_parts = [
+        f"Agent Discussion Summary (Rounds: {discussion_result.round_count})",
+        f"Consensus: {'Yes' if discussion_result.consensus_reached else 'No'}",
+        f"Confidence: {discussion_result.confidence_score:.2f}",
+        ""
+    ]
+    
+    # Add key messages from the discussion
+    for i, message in enumerate(discussion_result.final_messages[-4:], 1):  # Last 4 messages
+        confidence_str = f" (confidence: {message.confidence:.2f})" if message.confidence else ""
+        summary_parts.append(
+            f"{i}. {message.agent_name}: {message.content[:150]}{'...' if len(message.content) > 150 else ''}{confidence_str}"
+        )
+    
+    return '\n'.join(summary_parts)
 
 
 def _create_error_result(error_msg: str) -> PRAnalysisResult:
