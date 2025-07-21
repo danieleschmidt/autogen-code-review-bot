@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+### Added
+- **Agent Conversation System**: Revolutionary AI-powered code review enhancement
+  - Intelligent agent-to-agent discussions for comprehensive code analysis
+  - Sentiment analysis to determine when agents should engage in conversation
+  - Automatic resolution detection to prevent infinite discussion loops
+  - ConversationManager with configurable parameters and turn limits
+  - AgentConversation class for managing multi-turn discussions
+  - Enhanced CLI with `--agent-config` flag for AI conversation mode
+  - Seamless integration with existing PR analysis workflow
+  - Comprehensive test coverage including integration tests
+  - Fallback to traditional analysis when conversation system unavailable
 ### Security
 - Fixed command injection vulnerability in pr_analysis module
 - Added input validation and command allowlisting

@@ -20,7 +20,7 @@ import subprocess
 # Add src to Python path for imports
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
-from autogen_code_review_bot.pr_analysis import analyze_pr
+from autogen_code_review_bot.pr_analysis import analyze_pr, format_analysis_with_agents
 from autogen_code_review_bot.github_integration import analyze_and_comment
 from autogen_code_review_bot.logging_config import (
     configure_logging, get_logger, set_request_id, 
@@ -374,7 +374,7 @@ def run_server(config: Config) -> None:
         server.shutdown()
 
 
-def manual_analysis(repo_path: str, config_path: Optional[str] = None) -> None:
+def manual_analysis(repo_path: str, config_path: Optional[str] = None, agent_config_path: Optional[str] = None) -> None:
     """Run manual analysis on a local repository."""
     if not Path(repo_path).is_dir():
         logger.error("Repository path does not exist", 
@@ -398,22 +398,30 @@ def manual_analysis(repo_path: str, config_path: Optional[str] = None) -> None:
         logger.info("Manual analysis completed successfully",
                    security_tool=result.security.tool,
                    style_tool=result.style.tool,
-                   performance_tool=result.performance.tool)
+                   performance_tool=result.performance.tool,
+                   using_agent_conversation=agent_config_path is not None)
         
-        # Print results
-        print("\\n=== AutoGen Code Review Results ===\\n")
-        
-        print(f"🔒 Security Analysis ({result.security.tool}):")
-        print(result.security.output or "No issues found")
-        print()
-        
-        print(f"🎨 Style Analysis ({result.style.tool}):")
-        print(result.style.output or "No issues found")
-        print()
-        
-        print(f"⚡ Performance Analysis ({result.performance.tool}):")
-        print(result.performance.output or "No issues found")
-        print()
+        # Format results with agent conversation if config provided
+        if agent_config_path:
+            print("\\n=== AutoGen Code Review Results with Agent Conversation ===\\n")
+            formatted_output = format_analysis_with_agents(result, agent_config_path)
+            print(formatted_output)
+        else:
+            # Print results in traditional format
+            print("\\n=== AutoGen Code Review Results ===\\n")
+            print("💡 Tip: Use --agent-config for enhanced AI-powered review discussions\\n")
+            
+            print(f"🔒 Security Analysis ({result.security.tool}):")
+            print(result.security.output or "No issues found")
+            print()
+            
+            print(f"🎨 Style Analysis ({result.style.tool}):")
+            print(result.style.output or "No issues found")
+            print()
+            
+            print(f"⚡ Performance Analysis ({result.performance.tool}):")
+            print(result.performance.output or "No issues found")
+            print()
         
         log_operation_end(logger, analysis_context, success=True)
         
@@ -534,6 +542,9 @@ Examples:
   # Run with custom linter config
   python bot.py --analyze /path/to/repo --linter-config linters.yaml
   
+  # Run with AI agent conversations for enhanced feedback
+  python bot.py --analyze /path/to/repo --agent-config agent_config.yaml
+  
   # Run test coverage analysis
   python bot.py --coverage /path/to/repo
   
@@ -573,6 +584,12 @@ Examples:
     )
     
     parser.add_argument(
+        '--agent-config',
+        metavar='AGENT_CONFIG',
+        help='Path to agent configuration YAML file for enhanced reviews'
+    )
+    
+    parser.add_argument(
         '--verbose', '-v',
         action='store_true',
         help='Enable verbose logging'
@@ -591,7 +608,7 @@ Examples:
     if args.server:
         run_server(config)
     elif args.analyze:
-        manual_analysis(args.analyze, args.linter_config)
+        manual_analysis(args.analyze, args.linter_config, args.agent_config)
     elif args.coverage:
         run_coverage_analysis(args.coverage, args.config)
     else:
