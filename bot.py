@@ -9,6 +9,7 @@ import yaml
 import logging
 import hmac
 import hashlib
+import time
 from pathlib import Path
 from typing import Dict, Any, Optional
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -26,6 +27,9 @@ from autogen_code_review_bot.logging_config import (
     log_operation_start, log_operation_end, ContextLogger
 )
 from autogen_code_review_bot.webhook_deduplication import is_duplicate_event
+from autogen_code_review_bot.coverage_metrics import (
+    CoverageConfig, generate_coverage_report, validate_coverage_threshold
+)
 
 # Configure structured logging
 configure_logging(level="INFO", service_name="autogen-code-review-bot")
@@ -421,6 +425,99 @@ def manual_analysis(repo_path: str, config_path: Optional[str] = None) -> None:
         sys.exit(1)
 
 
+def run_coverage_analysis(repo_path: str, config_file: Optional[str] = None):
+    """Run test coverage analysis on a repository.
+    
+    Args:
+        repo_path: Path to the repository
+        config_file: Optional coverage configuration file
+    """
+    # Validate repository path
+    if not os.path.exists(repo_path):
+        logger.error("Repository path does not exist", repo_path=repo_path)
+        print(f"❌ Error: Repository path '{repo_path}' does not exist")
+        sys.exit(1)
+    
+    # Set up operation tracking
+    analysis_context = log_operation_start(
+        logger,
+        "coverage_analysis",
+        repo_path=repo_path,
+        config_file=config_file
+    )
+    
+    try:
+        logger.info("Starting coverage analysis", repo_path=repo_path)
+        print(f"🔍 Running coverage analysis on: {repo_path}")
+        
+        # Load coverage configuration
+        if config_file and os.path.exists(config_file):
+            coverage_config = CoverageConfig.from_file(config_file)
+            print(f"📋 Loaded coverage config from: {config_file}")
+        else:
+            coverage_config = CoverageConfig()
+            print(f"📋 Using default coverage config (threshold: {coverage_config.minimum_coverage}%)")
+        
+        # Create output directory for reports
+        output_dir = Path(repo_path) / "coverage_reports"
+        output_dir.mkdir(exist_ok=True)
+        
+        # Run coverage analysis
+        print("🧪 Discovering and running tests with coverage...")
+        result, html_report = generate_coverage_report(
+            repo_path, 
+            coverage_config, 
+            str(output_dir)
+        )
+        
+        # Display results
+        print("\n📊 Coverage Analysis Results:")
+        print(f"   Total Coverage: {result.total_coverage:.1f}%")
+        print(f"   Line Coverage: {result.line_coverage:.1f}%")
+        print(f"   Branch Coverage: {result.branch_coverage:.1f}%")
+        print(f"   Files Analyzed: {result.files_analyzed}")
+        print(f"   Lines Covered: {result.lines_covered} / {result.lines_total}")
+        
+        # Validate against threshold
+        is_valid, message = validate_coverage_threshold(result, coverage_config.minimum_coverage)
+        
+        if is_valid:
+            print(f"✅ {message}")
+        else:
+            print(f"❌ {message}")
+        
+        # Report HTML output
+        if html_report:
+            print(f"📄 HTML report generated: {html_report}")
+        
+        # Save JSON report
+        json_report_path = output_dir / f"coverage_{int(time.time())}.json"
+        with open(json_report_path, 'w') as f:
+            json.dump(result.to_dict(), f, indent=2)
+        print(f"💾 JSON report saved: {json_report_path}")
+        
+        log_operation_end(
+            logger, 
+            analysis_context, 
+            success=True,
+            coverage=result.total_coverage,
+            meets_threshold=is_valid
+        )
+        
+        # Exit with appropriate code
+        if not is_valid:
+            print(f"\n❌ Coverage analysis failed: {message}")
+            sys.exit(1)
+        else:
+            print(f"\n🎉 Coverage analysis passed!")
+            
+    except Exception as e:
+        logger.error("Coverage analysis failed", error=str(e), error_type=type(e).__name__)
+        print(f"❌ Coverage analysis failed: {str(e)}")
+        log_operation_end(logger, analysis_context, success=False, error=str(e))
+        sys.exit(1)
+
+
 def main():
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(
@@ -436,6 +533,12 @@ Examples:
   
   # Run with custom linter config
   python bot.py --analyze /path/to/repo --linter-config linters.yaml
+  
+  # Run test coverage analysis
+  python bot.py --coverage /path/to/repo
+  
+  # Run coverage with custom config
+  python bot.py --coverage /path/to/repo --config coverage.yaml
 """
     )
     
@@ -449,6 +552,12 @@ Examples:
         '--analyze',
         metavar='REPO_PATH',
         help='Run manual analysis on local repository'
+    )
+    
+    parser.add_argument(
+        '--coverage',
+        metavar='REPO_PATH',
+        help='Run test coverage analysis on repository'
     )
     
     parser.add_argument(
@@ -483,6 +592,8 @@ Examples:
         run_server(config)
     elif args.analyze:
         manual_analysis(args.analyze, args.linter_config)
+    elif args.coverage:
+        run_coverage_analysis(args.coverage, args.config)
     else:
         parser.print_help()
         sys.exit(1)
