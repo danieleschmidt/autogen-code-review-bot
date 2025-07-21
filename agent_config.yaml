@@ -1,0 +1,18 @@
+agents:
+  coder:
+    model: "gpt-4"
+    temperature: 0.1
+    focus_areas:
+      - "implementation details" 
+      - "bug detection"
+      - "performance optimization"
+      - "edge cases"
+  
+  reviewer:
+    model: "gpt-4"
+    temperature: 0.2
+    focus_areas:
+      - "code quality"
+      - "security vulnerabilities"
+      - "maintainability"
+      - "best practices"
