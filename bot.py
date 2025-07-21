@@ -25,6 +25,7 @@ from autogen_code_review_bot.logging_config import (
     configure_logging, get_logger, set_request_id, 
     log_operation_start, log_operation_end, ContextLogger
 )
+from autogen_code_review_bot.webhook_deduplication import is_duplicate_event
 
 # Configure structured logging
 configure_logging(level="INFO", service_name="autogen-code-review-bot")
@@ -123,6 +124,21 @@ class WebhookHandler(BaseHTTPRequestHandler):
                 self.send_error(401, "Unauthorized")
                 log_operation_end(logger, operation_context, success=False, error="signature_verification_failed")
                 return
+            
+            # Check for duplicate events using GitHub delivery ID
+            delivery_id = self.headers.get('X-GitHub-Delivery')
+            if is_duplicate_event(delivery_id):
+                req_logger.info("Duplicate webhook event detected, skipping processing", 
+                               delivery_id=delivery_id)
+                # Return success response for duplicates to avoid retries
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(b'{"status": "duplicate", "message": "Event already processed"}')
+                log_operation_end(logger, operation_context, success=True, result="duplicate_skipped")
+                return
+            
+            req_logger.debug("Webhook event accepted for processing", delivery_id=delivery_id)
             
             # Parse JSON payload
             try:
