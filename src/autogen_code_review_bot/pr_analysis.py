@@ -14,6 +14,7 @@ from .language_detection import detect_language
 from .models import AnalysisSection, PRAnalysisResult
 from .caching import LinterCache, get_commit_hash, InvalidationStrategy
 from .logging_config import get_logger
+from .agents import run_agent_conversation
 
 # Default mapping of languages to linter executables
 DEFAULT_LINTERS: Dict[str, str] = {
@@ -663,6 +664,82 @@ def analyze_pr(repo_path: str, config_path: str | None = None, use_cache: bool =
         cache.set(commit_hash, config_hash, result)
     
     return result
+
+
+def format_analysis_with_agents(result: PRAnalysisResult, config_path: str | None = None) -> str:
+    """Format analysis result with agent conversation for enhanced feedback.
+    
+    Args:
+        result: The PR analysis result
+        config_path: Optional path to agent configuration file
+        
+    Returns:
+        Formatted analysis with agent conversation
+    """
+    logger.info("Formatting analysis with agent conversation", 
+               extra={"has_config": config_path is not None})
+    
+    if not config_path:
+        # Fallback to basic formatting if no agent config
+        return format_analysis_result(result)
+    
+    try:
+        # Prepare code context from analysis results
+        code_context = _extract_code_context(result)
+        
+        # Run agent conversation
+        conversation_result = run_agent_conversation(code_context, config_path)
+        
+        # Combine original analysis with agent conversation
+        formatted_result = f"## Code Review Analysis\n\n"
+        formatted_result += format_analysis_result(result)
+        formatted_result += f"\n\n## Agent Discussion\n\n{conversation_result}\n"
+        
+        logger.info("Successfully formatted analysis with agent conversation")
+        return formatted_result
+        
+    except Exception as e:
+        logger.error("Failed to run agent conversation, falling back to basic format", 
+                    extra={"error": str(e), "error_type": type(e).__name__})
+        return format_analysis_result(result)
+
+
+def _extract_code_context(result: PRAnalysisResult) -> str:
+    """Extract relevant code context from analysis result for agent review."""
+    context_parts = []
+    
+    if result.security.output.strip():
+        context_parts.append(f"Security findings:\n{result.security.output}")
+    
+    if result.style.output.strip():
+        context_parts.append(f"Style findings:\n{result.style.output}")
+        
+    if result.performance.output.strip():
+        context_parts.append(f"Performance findings:\n{result.performance.output}")
+    
+    if not context_parts:
+        context_parts.append("No issues detected in analysis.")
+    
+    return "\n\n".join(context_parts)
+
+
+def format_analysis_result(result: PRAnalysisResult) -> str:
+    """Format analysis result into readable text."""
+    sections = []
+    
+    if result.security.output.strip():
+        sections.append(f"**Security ({result.security.tool})**:\n{result.security.output}")
+    
+    if result.style.output.strip():
+        sections.append(f"**Style ({result.style.tool})**:\n{result.style.output}")
+        
+    if result.performance.output.strip():
+        sections.append(f"**Performance ({result.performance.tool})**:\n{result.performance.output}")
+    
+    if not sections:
+        return "✅ No issues found in the analysis."
+    
+    return "\n\n".join(sections)
 
 
 def _create_error_result(error_msg: str) -> PRAnalysisResult:
