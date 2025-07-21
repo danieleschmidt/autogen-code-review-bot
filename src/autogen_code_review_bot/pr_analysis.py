@@ -12,7 +12,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from .language_detection import detect_language
 from .models import AnalysisSection, PRAnalysisResult
-from .caching import LinterCache, get_commit_hash
+from .caching import LinterCache, get_commit_hash, InvalidationStrategy
 from .logging_config import get_logger
 
 # Default mapping of languages to linter executables
@@ -257,6 +257,10 @@ def _analyze_pr_streaming(repo_path: str, linters: Dict[str, str], use_cache: bo
         if use_cache:
             logger.debug("Initializing cache for streaming analysis")
             cache = LinterCache()
+            
+            # Set up cache invalidation strategy
+            cache.invalidation_strategy = InvalidationStrategy(cache.cache_dir)
+            
             commit_hash = get_commit_hash(repo_path)
             if commit_hash:
                 config_hash = cache.get_config_hash(linters)
@@ -265,7 +269,10 @@ def _analyze_pr_streaming(repo_path: str, linters: Dict[str, str], use_cache: bo
                                 "commit_hash": commit_hash[:8], 
                                 "config_hash": config_hash[:8]
                             })
-                cached_result = cache.get(commit_hash, config_hash)
+                
+                # Get list of tools for invalidation check
+                tools = list(linters.values())
+                cached_result = cache.get_with_invalidation_check(commit_hash, config_hash, tools)
                 if cached_result:
                     logger.info("Cache hit for streaming analysis", 
                                extra={"commit_hash": commit_hash[:8]})
@@ -586,6 +593,10 @@ def analyze_pr(repo_path: str, config_path: str | None = None, use_cache: bool =
     if use_cache:
         logger.debug("Initializing cache for analysis")
         cache = LinterCache()
+        
+        # Set up cache invalidation strategy
+        cache.invalidation_strategy = InvalidationStrategy(cache.cache_dir)
+        
         commit_hash = get_commit_hash(repo_path)
         if commit_hash:
             config_hash = cache.get_config_hash(linters)
@@ -594,7 +605,10 @@ def analyze_pr(repo_path: str, config_path: str | None = None, use_cache: bool =
                             "commit_hash": commit_hash[:8], 
                             "config_hash": config_hash[:8]
                         })
-            cached_result = cache.get(commit_hash, config_hash)
+            
+            # Get list of tools for invalidation check
+            tools = list(linters.values())
+            cached_result = cache.get_with_invalidation_check(commit_hash, config_hash, tools)
             if cached_result:
                 logger.info("Cache hit - returning cached results", 
                            extra={"commit_hash": commit_hash[:8]})
