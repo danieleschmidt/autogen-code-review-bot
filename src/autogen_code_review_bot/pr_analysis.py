@@ -13,6 +13,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from .language_detection import detect_language
 from .models import AnalysisSection, PRAnalysisResult
 from .caching import LinterCache, get_commit_hash
+from .logging_config import get_logger
 
 # Default mapping of languages to linter executables
 DEFAULT_LINTERS: Dict[str, str] = {
@@ -21,6 +22,9 @@ DEFAULT_LINTERS: Dict[str, str] = {
     "typescript": "eslint",
     "ruby": "rubocop",
 }
+
+# Initialize logger for PR analysis operations
+logger = get_logger(__name__)
 
 
 def load_linter_config(config_path: str | Path | None = None) -> Dict[str, str]:
@@ -69,12 +73,21 @@ def _detect_repo_languages(repo_path: str | Path) -> Set[str]:
 
     repo_path = Path(repo_path)
     languages: Set[str] = set()
+    file_count = 0
     for root, _, files in os.walk(repo_path):
         for name in files:
             file_path = Path(root) / name
             lang = detect_language(file_path)
             if lang != "unknown":
                 languages.add(lang)
+            file_count += 1
+    
+    logger.debug("Language detection completed", 
+                extra={
+                    "languages": list(languages), 
+                    "files_scanned": file_count,
+                    "repo_path": str(repo_path)
+                })
     return languages
 
 
@@ -257,6 +270,8 @@ def _run_performance_checks(repo_path: str, ensure) -> str:
 
 def _run_all_checks_parallel(repo_path: str, linters: Dict[str, str]) -> PRAnalysisResult:
     """Run all analysis checks (security, style, performance) in parallel."""
+    logger.debug("Starting parallel analysis checks", extra={"repo_path": repo_path, "linters": linters})
+    
     def ensure(tool: str) -> str:
         # Validate tool is in allowlist before checking installation
         if Path(tool).name not in ALLOWED_EXECUTABLES:
@@ -265,16 +280,26 @@ def _run_all_checks_parallel(repo_path: str, linters: Dict[str, str]) -> PRAnaly
     
     # Define check functions
     def run_security():
-        return _run_security_checks(repo_path, ensure)
+        logger.debug("Starting security analysis")
+        result = _run_security_checks(repo_path, ensure)
+        logger.debug("Security analysis completed")
+        return result
     
     def run_style():
-        return _run_style_checks_parallel(repo_path, linters, max_workers=3)
+        logger.debug("Starting style analysis")
+        result = _run_style_checks_parallel(repo_path, linters, max_workers=3)
+        logger.debug("Style analysis completed")
+        return result
     
     def run_performance():
-        return _run_performance_checks(repo_path, ensure)
+        logger.debug("Starting performance analysis")
+        result = _run_performance_checks(repo_path, ensure)
+        logger.debug("Performance analysis completed")
+        return result
     
     # Execute all checks in parallel
     with ThreadPoolExecutor(max_workers=3) as executor:
+        logger.debug("Submitting parallel analysis tasks")
         # Submit all tasks
         security_future = executor.submit(run_security)
         style_future = executor.submit(run_style)
@@ -285,8 +310,10 @@ def _run_all_checks_parallel(repo_path: str, linters: Dict[str, str]) -> PRAnaly
             security_output = security_future.result()
             style_tool, style_output = style_future.result()
             performance_output = performance_future.result()
+            logger.debug("All parallel analysis tasks completed successfully")
         except Exception as exc:
             # If any check fails, return error result
+            logger.error("Parallel execution failed", extra={"error": str(exc)})
             return _create_error_result(f"parallel execution error: {exc}")
     
     return PRAnalysisResult(
@@ -314,36 +341,66 @@ def analyze_pr(repo_path: str, config_path: str | None = None, use_cache: bool =
     --------
     Validates all input paths and rejects unsafe commands/paths.
     """
+    logger.info("Starting PR analysis", 
+                extra={
+                    "repo_path": repo_path, 
+                    "use_cache": use_cache, 
+                    "use_parallel": use_parallel,
+                    "config_path": config_path
+                })
+    
     # Validate repository path for security
     if not repo_path or not isinstance(repo_path, str):
+        logger.error("Invalid repository path provided", extra={"repo_path": repo_path})
         return _create_error_result("invalid repository path")
     
     if not _validate_path_safety(repo_path):
+        logger.error("Unsafe repository path rejected", extra={"repo_path": repo_path})
         return _create_error_result("unsafe repository path rejected")
     
     repo_path_obj = Path(repo_path)
     if not repo_path_obj.exists() or not repo_path_obj.is_dir():
+        logger.error("Repository path validation failed", 
+                    extra={
+                        "repo_path": repo_path, 
+                        "exists": repo_path_obj.exists(), 
+                        "is_dir": repo_path_obj.is_dir()
+                    })
         return _create_error_result("repository path does not exist or is not a directory")
 
+    logger.debug("Loading linter configuration", extra={"config_path": config_path})
     linters = load_linter_config(config_path)
+    logger.debug("Linter configuration loaded", extra={"linters": linters})
     
     # Try to use cache if enabled
     cache = None
     commit_hash = None
     config_hash = None
     if use_cache:
+        logger.debug("Initializing cache for analysis")
         cache = LinterCache()
         commit_hash = get_commit_hash(repo_path)
         if commit_hash:
             config_hash = cache.get_config_hash(linters)
+            logger.debug("Checking cache for existing results", 
+                        extra={
+                            "commit_hash": commit_hash[:8], 
+                            "config_hash": config_hash[:8]
+                        })
             cached_result = cache.get(commit_hash, config_hash)
             if cached_result:
+                logger.info("Cache hit - returning cached results", 
+                           extra={"commit_hash": commit_hash[:8]})
                 return cached_result
+        else:
+            logger.debug("No commit hash available, cache disabled")
 
     # Run analysis - use parallel execution if enabled
     if use_parallel:
+        logger.info("Running analysis with parallel execution")
         result = _run_all_checks_parallel(repo_path, linters)
     else:
+        logger.info("Running analysis with sequential execution")
         # Sequential execution (original implementation)
         def ensure(tool: str) -> str:
             # Validate tool is in allowlist before checking installation
@@ -361,8 +418,16 @@ def analyze_pr(repo_path: str, config_path: str | None = None, use_cache: bool =
             performance=AnalysisSection(tool="radon", output=performance_output),
         )
     
+    logger.info("Analysis completed successfully",
+                extra={
+                    "has_security_issues": bool(result.security.output.strip()),
+                    "has_style_issues": bool(result.style.output.strip()),
+                    "has_performance_issues": bool(result.performance.output.strip())
+                })
+    
     # Cache the result if caching is enabled and we have a commit hash
     if use_cache and cache and commit_hash and config_hash:
+        logger.debug("Caching analysis results", extra={"commit_hash": commit_hash[:8]})
         cache.set(commit_hash, config_hash, result)
     
     return result
