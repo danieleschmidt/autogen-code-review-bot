@@ -10,6 +10,11 @@ from typing import List, Dict, Optional
 
 import yaml
 
+# Configuration error class (will be imported from config_validation when needed)
+class ConfigError(Exception):
+    """Configuration error for agent loading."""
+    pass
+
 
 @dataclass
 class AgentConfig:
@@ -54,18 +59,50 @@ class ReviewerAgent(BaseAgent):
 
 def load_agents_from_yaml(path: str) -> Dict[str, BaseAgent]:
     """Load agent configuration from a YAML file and return agent instances."""
-    with open(path, "r", encoding="utf-8") as fh:
-        data = yaml.safe_load(fh)
+    from .config_validation import validate_config_file, ConfigError, ValidationError
+    from .logging_config import get_logger
+    
+    logger = get_logger(__name__)
+    
+    try:
+        # Validate configuration using our validation framework
+        data = validate_config_file(path, "agent")
+        
+        logger.info("Successfully loaded and validated agent configuration", 
+                   extra={"config_path": path})
+        
+    except (ConfigError, ValidationError) as e:
+        logger.error(f"Agent configuration validation failed: {e}", 
+                    extra={"config_path": path})
+        raise ConfigError(f"Invalid agent configuration in {path}: {e}")
+    except (OSError, PermissionError) as e:
+        logger.error(f"Unable to read agent configuration file: {e}", 
+                    extra={"config_path": path})
+        raise ConfigError(f"Cannot read agent configuration file {path}: {e}")
 
     agents = {}
+    agents_config = data.get("agents", {})
+    
     for role in ("coder", "reviewer"):
-        cfg = data.get("agents", {}).get(role, {})
+        cfg = agents_config.get(role, {})
         if not cfg:
+            logger.debug(f"No configuration found for {role} agent, skipping")
             continue
-        agent_config = AgentConfig(**cfg)
-        agent_cls = CoderAgent if role == "coder" else ReviewerAgent
-        agents[role] = agent_cls(role, agent_config)
+        
+        try:
+            agent_config = AgentConfig(**cfg)
+            agent_cls = CoderAgent if role == "coder" else ReviewerAgent
+            agents[role] = agent_cls(role, agent_config)
+            logger.debug(f"Successfully created {role} agent", 
+                        extra={"model": agent_config.model, "focus_areas": agent_config.focus_areas})
+        except TypeError as e:
+            logger.error(f"Invalid configuration for {role} agent: {e}", 
+                        extra={"config": cfg})
+            raise ConfigError(f"Invalid {role} agent configuration: {e}")
 
+    if not agents:
+        logger.warning("No agents were configured")
+    
     return agents
 
 
