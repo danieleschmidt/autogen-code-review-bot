@@ -34,38 +34,44 @@ def load_linter_config(config_path: str | Path | None = None) -> Dict[str, str]:
     """Return language→linter mapping loaded from ``config_path``.
 
     Missing languages fall back to :data:`DEFAULT_LINTERS`.
-    Security: Validates config file path and contents.
+    Security: Validates config file path and contents using comprehensive validation.
     """
+    from .config_validation import validate_config_file, ConfigError, ValidationError
+    
     mapping = DEFAULT_LINTERS.copy()
     if config_path:
-        # Validate config file path for security
-        if not _validate_path_safety(str(config_path)):
-            return mapping  # Return defaults for unsafe paths
-            
         try:
             config_path = Path(config_path)
             if not config_path.exists() or not config_path.is_file():
+                logger.warning(f"Linter config file not found: {config_path}, using defaults")
                 return mapping
                 
             # Limit file size to prevent DoS
             if config_path.stat().st_size > 1024 * 1024:  # 1MB limit
+                logger.warning(f"Linter config file too large: {config_path}, using defaults")
                 return mapping
-                
-            with open(config_path, "r", encoding="utf-8") as fh:
-                data = yaml.safe_load(fh) or {}
-        except (OSError, yaml.YAMLError, PermissionError):
-            return mapping  # Return defaults on any error
             
-        linters = data.get("linters", {}) if isinstance(data, dict) else {}
-        if isinstance(linters, dict):
-            # Validate linter values against allowlist
-            safe_linters = {}
-            for k, v in linters.items():
-                if isinstance(k, str) and isinstance(v, str):
-                    linter_name = Path(v).name
-                    if linter_name in ALLOWED_EXECUTABLES:
-                        safe_linters[k] = v
-            mapping.update(safe_linters)
+            # Use our new validation system
+            validated_config = validate_config_file(str(config_path), "linter")
+            
+            linters = validated_config.get("linters", {})
+            if linters:
+                mapping.update(linters)
+                logger.info(f"Loaded and validated linter config with {len(linters)} mappings", 
+                           extra={"config_path": str(config_path), "linters": linters})
+            else:
+                logger.debug("No linter mappings in config file, using defaults")
+                
+        except (ConfigError, ValidationError) as e:
+            logger.error(f"Linter config validation failed: {e}", 
+                        extra={"config_path": str(config_path)})
+            # Return defaults on validation error - ensures system keeps working
+            return mapping
+        except (OSError, PermissionError) as e:
+            logger.warning(f"Unable to read linter config file: {e}", 
+                          extra={"config_path": str(config_path)})
+            return mapping
+    
     return mapping
 
 

@@ -67,10 +67,20 @@ class Config:
         # Load from config file if it exists
         if Path(self.config_path).exists():
             try:
-                with open(self.config_path, 'r', encoding='utf-8') as f:
-                    file_config = yaml.safe_load(f) or {}
+                from autogen_code_review_bot.config_validation import validate_config_file, ConfigError, ValidationError
+                
+                # Validate configuration using our validation framework
+                file_config = validate_config_file(self.config_path, "bot")
+                
                 # Merge file config with defaults (environment takes precedence)
                 config.update(file_config)
+                logger.info(f"Successfully loaded and validated configuration", 
+                           extra={"config_path": self.config_path, "sections": list(file_config.keys())})
+                
+            except (ConfigError, ValidationError) as e:
+                logger.error(f"Configuration validation failed: {e}", 
+                           extra={"config_path": self.config_path})
+                logger.warning("Using default configuration due to validation errors")
             except (yaml.YAMLError, OSError) as e:
                 logger.warning(f"Failed to load config file {self.config_path}: {e}")
         
