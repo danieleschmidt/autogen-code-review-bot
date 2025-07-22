@@ -30,10 +30,12 @@ from autogen_code_review_bot.webhook_deduplication import is_duplicate_event
 from autogen_code_review_bot.coverage_metrics import (
     CoverageConfig, generate_coverage_report, validate_coverage_threshold
 )
+from autogen_code_review_bot.monitoring import MetricsEmitter, MonitoringServer
 
-# Configure structured logging
+# Configure structured logging and metrics
 configure_logging(level="INFO", service_name="autogen-code-review-bot")
 logger = get_logger(__name__)
+metrics = MetricsEmitter()
 
 
 class Config:
@@ -162,11 +164,17 @@ class WebhookHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(b'{"status": "success"}')
             
+            # Record successful webhook processing metrics
+            metrics.record_counter("webhook_requests_total", 1, tags={"status": "success"})
+            
             log_operation_end(logger, operation_context, success=True)
             
         except Exception as e:
             req_logger.error("Webhook processing error", error=str(e), error_type=type(e).__name__)
             self.send_error(500, "Internal Server Error")
+            # Record failed webhook processing metrics
+            metrics.record_counter("webhook_requests_total", 1, tags={"status": "error"})
+            metrics.record_counter("webhook_errors_total", 1, tags={"error_type": type(e).__name__})
             log_operation_end(logger, operation_context, success=False, error=str(e))
     
     def _verify_signature(self, body: bytes) -> bool:
@@ -192,6 +200,9 @@ class WebhookHandler(BaseHTTPRequestHandler):
         event_type = self.headers.get('X-GitHub-Event')
         action = payload.get('action')
         
+        # Record webhook event metrics
+        metrics.record_counter("webhook_events_total", 1, tags={"event_type": event_type or "unknown", "action": action or "unknown"})
+        
         req_logger.info("Webhook event received", 
                        event_type=event_type, 
                        action=action,
@@ -199,8 +210,12 @@ class WebhookHandler(BaseHTTPRequestHandler):
         
         # Handle pull request events
         if event_type == 'pull_request' and action in ['opened', 'synchronize', 'reopened']:
+            # Record PR event processing metrics
+            metrics.record_counter("pr_events_processed_total", 1, tags={"action": action})
             self._handle_pr_event(payload, req_logger)
         else:
+            # Record ignored event metrics
+            metrics.record_counter("webhook_events_ignored_total", 1, tags={"event_type": event_type or "unknown", "action": action or "unknown"})
             req_logger.info("Ignoring webhook event", 
                           event_type=event_type, 
                           action=action,
@@ -237,11 +252,24 @@ class WebhookHandler(BaseHTTPRequestHandler):
                 repo_path = self._clone_repository(payload['repository'], temp_dir, pr_logger)
                 if repo_path:
                     try:
+                        # Record PR analysis start
+                        pr_start_time = time.time()
+                        
                         # Run analysis and post comment
                         analyze_and_comment(repo_path, repo_full_name, pr_number)
-                        pr_logger.info("PR analysis completed successfully")
+                        
+                        # Record successful PR analysis metrics
+                        pr_duration = time.time() - pr_start_time
+                        metrics.record_histogram("pr_analysis_webhook_duration_seconds", pr_duration)
+                        metrics.record_counter("pr_analysis_webhook_completed_total", 1, tags={"status": "success"})
+                        
+                        pr_logger.info("PR analysis completed successfully", extra={"duration_seconds": pr_duration})
                         log_operation_end(logger, pr_context, success=True)
                     except Exception as analysis_error:
+                        # Record failed PR analysis metrics
+                        metrics.record_counter("pr_analysis_webhook_completed_total", 1, tags={"status": "error"})
+                        metrics.record_counter("pr_analysis_webhook_errors_total", 1, tags={"error_type": type(analysis_error).__name__})
+                        
                         pr_logger.error("Analysis failed", error=str(analysis_error))
                         log_operation_end(logger, pr_context, success=False, error=str(analysis_error))
                         raise
