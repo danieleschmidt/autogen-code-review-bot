@@ -415,9 +415,9 @@ def run_server(config: Config) -> None:
 def manual_analysis(repo_path: str, config_path: Optional[str] = None, agent_config_path: Optional[str] = None) -> None:
     """Run manual analysis on a local repository."""
     if not Path(repo_path).is_dir():
-        logger.error("Repository path does not exist", 
-                    repo_path=repo_path,
-                    component="manual_analysis")
+        logger.error("Repository path does not exist", extra={
+                    "repo_path": repo_path,
+                    "component": "manual_analysis"})
         sys.exit(1)
     
     # Start manual analysis operation
@@ -428,16 +428,16 @@ def manual_analysis(repo_path: str, config_path: Optional[str] = None, agent_con
         config_path=config_path
     )
     
-    logger.info("Starting manual repository analysis", repo_path=repo_path)
+    logger.info("Starting manual repository analysis", extra={"repo_path": repo_path})
     
     try:
         result = analyze_pr(repo_path, config_path)
         
-        logger.info("Manual analysis completed successfully",
-                   security_tool=result.security.tool,
-                   style_tool=result.style.tool,
-                   performance_tool=result.performance.tool,
-                   using_agent_conversation=agent_config_path is not None)
+        logger.info("Manual analysis completed successfully", extra={
+                   "security_tool": result.security.tool,
+                   "style_tool": result.style.tool,
+                   "performance_tool": result.performance.tool,
+                   "using_agent_conversation": agent_config_path is not None})
         
         # Format results with agent conversation if config provided
         if agent_config_path:
@@ -464,9 +464,9 @@ def manual_analysis(repo_path: str, config_path: Optional[str] = None, agent_con
         log_operation_end(logger, analysis_context, success=True)
         
     except Exception as e:
-        logger.error("Manual analysis failed", 
-                    error=str(e),
-                    error_type=type(e).__name__)
+        logger.error("Manual analysis failed", extra={
+                    "error": str(e),
+                    "error_type": type(e).__name__})
         log_operation_end(logger, analysis_context, success=False, error=str(e))
         sys.exit(1)
 
@@ -480,7 +480,7 @@ def run_coverage_analysis(repo_path: str, config_file: Optional[str] = None):
     """
     # Validate repository path
     if not os.path.exists(repo_path):
-        logger.error("Repository path does not exist", repo_path=repo_path)
+        logger.error("Repository path does not exist", extra={"repo_path": repo_path})
         print(f"❌ Error: Repository path '{repo_path}' does not exist")
         sys.exit(1)
     
@@ -493,7 +493,7 @@ def run_coverage_analysis(repo_path: str, config_file: Optional[str] = None):
     )
     
     try:
-        logger.info("Starting coverage analysis", repo_path=repo_path)
+        logger.info("Starting coverage analysis", extra={"repo_path": repo_path})
         print(f"🔍 Running coverage analysis on: {repo_path}")
         
         # Load coverage configuration
@@ -558,7 +558,7 @@ def run_coverage_analysis(repo_path: str, config_file: Optional[str] = None):
             print(f"\n🎉 Coverage analysis passed!")
             
     except Exception as e:
-        logger.error("Coverage analysis failed", error=str(e), error_type=type(e).__name__)
+        logger.error("Coverage analysis failed", extra={"error": str(e), "error_type": type(e).__name__})
         print(f"❌ Coverage analysis failed: {str(e)}")
         log_operation_end(logger, analysis_context, success=False, error=str(e))
         sys.exit(1)
