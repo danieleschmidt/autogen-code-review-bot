@@ -60,17 +60,29 @@ class CoverageConfig:
                               extra={"config_path": config_path})
                 return cls()
             
-            with open(config_path, 'r') as f:
-                config_data = yaml.safe_load(f)
+            from .config_validation import validate_config_file, ConfigError, ValidationError
             
-            if not config_data:
-                logger.warning("Empty coverage config file, using defaults")
+            try:
+                # Validate configuration using our validation framework
+                config_data = validate_config_file(config_path, "coverage")
+                
+                if not config_data:
+                    logger.warning("Empty coverage config file, using defaults")
+                    return cls()
+                
+                # Extract coverage-specific configuration
+                coverage_config = config_data.get("coverage", {})
+                
+                logger.info("Loaded and validated coverage configuration from file", 
+                           extra={"config_path": config_path, "config": coverage_config})
+                
+                return cls(**coverage_config)
+                
+            except (ConfigError, ValidationError) as e:
+                logger.error(f"Coverage configuration validation failed: {e}", 
+                           extra={"config_path": config_path})
+                logger.warning("Using default coverage configuration due to validation errors")
                 return cls()
-            
-            logger.info("Loaded coverage configuration from file", 
-                       extra={"config_path": config_path, "config": config_data})
-            
-            return cls(**config_data)
             
         except (yaml.YAMLError, TypeError, ValueError) as e:
             logger.error("Failed to load coverage config, using defaults", 
