@@ -15,6 +15,7 @@ from .models import AnalysisSection, PRAnalysisResult
 from .caching import LinterCache, get_commit_hash, InvalidationStrategy
 from .logging_config import get_logger
 from .agents import run_agent_conversation
+from .monitoring import MetricsEmitter
 
 # Default mapping of languages to linter executables
 DEFAULT_LINTERS: Dict[str, str] = {
@@ -24,8 +25,9 @@ DEFAULT_LINTERS: Dict[str, str] = {
     "ruby": "rubocop",
 }
 
-# Initialize logger for PR analysis operations
+# Initialize logger and metrics for PR analysis operations
 logger = get_logger(__name__)
+metrics = MetricsEmitter()
 
 
 def load_linter_config(config_path: str | Path | None = None) -> Dict[str, str]:
@@ -485,6 +487,7 @@ def _run_performance_checks(repo_path: str, ensure) -> str:
 
 def _run_all_checks_parallel(repo_path: str, linters: Dict[str, str]) -> PRAnalysisResult:
     """Run all analysis checks (security, style, performance) in parallel."""
+    import time
     logger.debug("Starting parallel analysis checks", extra={"repo_path": repo_path, "linters": linters})
     
     def ensure(tool: str) -> str:
@@ -493,23 +496,32 @@ def _run_all_checks_parallel(repo_path: str, linters: Dict[str, str]) -> PRAnaly
             return f"tool '{tool}' not allowed"
         return "not installed" if which(tool) is None else ""
     
-    # Define check functions
+    # Define check functions with timing
     def run_security():
+        start_time = time.time()
         logger.debug("Starting security analysis")
         result = _run_security_checks(repo_path, ensure)
-        logger.debug("Security analysis completed")
+        duration = time.time() - start_time
+        metrics.record_histogram("pr_analysis_check_duration_seconds", duration, tags={"check_type": "security"})
+        logger.debug("Security analysis completed", extra={"duration_seconds": duration})
         return result
     
     def run_style():
+        start_time = time.time()
         logger.debug("Starting style analysis")
         result = _run_style_checks_parallel(repo_path, linters, max_workers=3)
-        logger.debug("Style analysis completed")
+        duration = time.time() - start_time
+        metrics.record_histogram("pr_analysis_check_duration_seconds", duration, tags={"check_type": "style"})
+        logger.debug("Style analysis completed", extra={"duration_seconds": duration})
         return result
     
     def run_performance():
+        start_time = time.time()
         logger.debug("Starting performance analysis")
         result = _run_performance_checks(repo_path, ensure)
-        logger.debug("Performance analysis completed")
+        duration = time.time() - start_time
+        metrics.record_histogram("pr_analysis_check_duration_seconds", duration, tags={"check_type": "performance"})
+        logger.debug("Performance analysis completed", extra={"duration_seconds": duration})
         return result
     
     # Execute all checks in parallel
@@ -529,6 +541,8 @@ def _run_all_checks_parallel(repo_path: str, linters: Dict[str, str]) -> PRAnaly
         except Exception as exc:
             # If any check fails, return error result
             logger.error("Parallel execution failed", extra={"error": str(exc)})
+            # Record parallel execution error metrics
+            metrics.record_counter("pr_analysis_errors_total", 1, tags={"error_type": "parallel_execution"})
             return _create_error_result(f"parallel execution error: {exc}")
     
     return PRAnalysisResult(
@@ -556,6 +570,14 @@ def analyze_pr(repo_path: str, config_path: str | None = None, use_cache: bool =
     --------
     Validates all input paths and rejects unsafe commands/paths.
     """
+    # Start timing and metrics collection
+    import time
+    analysis_start_time = time.time()
+    
+    # Record throughput metrics
+    metrics.record_counter("pr_analysis_requests_total", 1, 
+                          tags={"cache_enabled": str(use_cache), "parallel_enabled": str(use_parallel)})
+    
     logger.info("Starting PR analysis", 
                 extra={
                     "repo_path": repo_path, 
@@ -567,10 +589,14 @@ def analyze_pr(repo_path: str, config_path: str | None = None, use_cache: bool =
     # Validate repository path for security
     if not repo_path or not isinstance(repo_path, str):
         logger.error("Invalid repository path provided", extra={"repo_path": repo_path})
+        # Record error metrics
+        metrics.record_counter("pr_analysis_errors_total", 1, tags={"error_type": "invalid_path"})
         return _create_error_result("invalid repository path")
     
     if not _validate_path_safety(repo_path):
         logger.error("Unsafe repository path rejected", extra={"repo_path": repo_path})
+        # Record security error metrics
+        metrics.record_counter("pr_analysis_errors_total", 1, tags={"error_type": "unsafe_path"})
         return _create_error_result("unsafe repository path rejected")
     
     repo_path_obj = Path(repo_path)
@@ -581,6 +607,8 @@ def analyze_pr(repo_path: str, config_path: str | None = None, use_cache: bool =
                         "exists": repo_path_obj.exists(), 
                         "is_dir": repo_path_obj.is_dir()
                     })
+        # Record validation error metrics
+        metrics.record_counter("pr_analysis_errors_total", 1, tags={"error_type": "path_validation"})
         return _create_error_result("repository path does not exist or is not a directory")
 
     logger.debug("Loading linter configuration", extra={"config_path": config_path})
@@ -613,6 +641,10 @@ def analyze_pr(repo_path: str, config_path: str | None = None, use_cache: bool =
             if cached_result:
                 logger.info("Cache hit - returning cached results", 
                            extra={"commit_hash": commit_hash[:8]})
+                # Record cache hit metrics
+                metrics.record_counter("pr_analysis_cache_hits_total", 1)
+                analysis_duration = time.time() - analysis_start_time
+                metrics.record_histogram("pr_analysis_duration_seconds", analysis_duration, tags={"cache_hit": "true"})
                 return cached_result
         else:
             logger.debug("No commit hash available, cache disabled")
@@ -626,12 +658,23 @@ def analyze_pr(repo_path: str, config_path: str | None = None, use_cache: bool =
                        "total_size_mb": total_size / (1024 * 1024),
                        "reason": "repository_size_optimization"
                    })
-        return _analyze_pr_streaming(repo_path, linters, use_cache)
+        # Record streaming analysis metrics
+        metrics.record_counter("pr_analysis_streaming_total", 1, tags={"file_count": str(file_count), "size_mb": str(int(total_size / (1024 * 1024)))})
+        streaming_result = _analyze_pr_streaming(repo_path, linters, use_cache)
+        analysis_duration = time.time() - analysis_start_time
+        metrics.record_histogram("pr_analysis_duration_seconds", analysis_duration, tags={"method": "streaming"})
+        return streaming_result
 
     # Run analysis - use parallel execution if enabled
+    analysis_method_start = time.time()
+    
     if use_parallel:
         logger.info("Running analysis with parallel execution")
         result = _run_all_checks_parallel(repo_path, linters)
+        # Record parallel execution metrics
+        parallel_duration = time.time() - analysis_method_start
+        metrics.record_histogram("pr_analysis_method_duration_seconds", parallel_duration, tags={"method": "parallel"})
+        metrics.record_counter("pr_analysis_method_total", 1, tags={"method": "parallel"})
     else:
         logger.info("Running analysis with sequential execution")
         # Sequential execution (original implementation)
@@ -650,18 +693,48 @@ def analyze_pr(repo_path: str, config_path: str | None = None, use_cache: bool =
             style=AnalysisSection(tool=style_tool or "lint", output=style_output),
             performance=AnalysisSection(tool="radon", output=performance_output),
         )
+        # Record sequential execution metrics
+        sequential_duration = time.time() - analysis_method_start
+        metrics.record_histogram("pr_analysis_method_duration_seconds", sequential_duration, tags={"method": "sequential"})
+        metrics.record_counter("pr_analysis_method_total", 1, tags={"method": "sequential"})
+    
+    # Calculate and record completion metrics
+    analysis_duration = time.time() - analysis_start_time
+    metrics.record_histogram("pr_analysis_duration_seconds", analysis_duration, tags={"cache_hit": "false"})
+    metrics.record_counter("pr_analysis_completed_total", 1)
+    
+    # Record issue detection metrics
+    has_security_issues = bool(result.security.output.strip())
+    has_style_issues = bool(result.style.output.strip())
+    has_performance_issues = bool(result.performance.output.strip())
+    
+    if has_security_issues:
+        metrics.record_counter("pr_analysis_issues_detected_total", 1, tags={"issue_type": "security"})
+    if has_style_issues:
+        metrics.record_counter("pr_analysis_issues_detected_total", 1, tags={"issue_type": "style"})
+    if has_performance_issues:
+        metrics.record_counter("pr_analysis_issues_detected_total", 1, tags={"issue_type": "performance"})
+    
+    # Record quality score (inverse of issues found)
+    total_issues = sum([has_security_issues, has_style_issues, has_performance_issues])
+    quality_score = max(0, 100 - (total_issues * 33))  # 0-100 scale
+    metrics.record_gauge("pr_analysis_quality_score", quality_score)
     
     logger.info("Analysis completed successfully",
                 extra={
-                    "has_security_issues": bool(result.security.output.strip()),
-                    "has_style_issues": bool(result.style.output.strip()),
-                    "has_performance_issues": bool(result.performance.output.strip())
+                    "has_security_issues": has_security_issues,
+                    "has_style_issues": has_style_issues,
+                    "has_performance_issues": has_performance_issues,
+                    "analysis_duration_seconds": analysis_duration,
+                    "quality_score": quality_score
                 })
     
     # Cache the result if caching is enabled and we have a commit hash
     if use_cache and cache and commit_hash and config_hash:
         logger.debug("Caching analysis results", extra={"commit_hash": commit_hash[:8]})
         cache.set(commit_hash, config_hash, result)
+        # Record cache storage metrics
+        metrics.record_counter("pr_analysis_cache_stores_total", 1)
     
     return result
 
