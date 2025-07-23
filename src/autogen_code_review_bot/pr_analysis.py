@@ -624,9 +624,29 @@ def _run_performance_checks(repo_path: str, ensure) -> str:
     return ensure("radon") or _run_command(["radon", "cc", "-s", "-a", repo_path], cwd=repo_path, project_root=repo_path)
 
 
+def _run_timed_check(check_type: str, check_func, *args):
+    """Run a check function with timing and metrics recording.
+    
+    Args:
+        check_type: Type of check (security, style, performance) for logging/metrics
+        check_func: Function to execute
+        *args: Arguments to pass to check_func
+        
+    Returns:
+        Result from check_func
+    """
+    import time
+    start_time = time.time()
+    logger.debug(f"Starting {check_type} analysis")
+    result = check_func(*args)
+    duration = time.time() - start_time
+    metrics.record_histogram("pr_analysis_check_duration_seconds", duration, tags={"check_type": check_type})
+    logger.debug(f"{check_type.capitalize()} analysis completed", extra={"duration_seconds": duration})
+    return result
+
+
 def _run_all_checks_parallel(repo_path: str, linters: Dict[str, str]) -> PRAnalysisResult:
     """Run all analysis checks (security, style, performance) in parallel."""
-    import time
     logger.debug("Starting parallel analysis checks", extra={"repo_path": repo_path, "linters": linters})
     
     def ensure(tool: str) -> str:
@@ -635,33 +655,15 @@ def _run_all_checks_parallel(repo_path: str, linters: Dict[str, str]) -> PRAnaly
             return f"tool '{tool}' not allowed"
         return "not installed" if which(tool) is None else ""
     
-    # Define check functions with timing
+    # Define check functions using the timing utility
     def run_security():
-        start_time = time.time()
-        logger.debug("Starting security analysis")
-        result = _run_security_checks(repo_path, ensure)
-        duration = time.time() - start_time
-        metrics.record_histogram("pr_analysis_check_duration_seconds", duration, tags={"check_type": "security"})
-        logger.debug("Security analysis completed", extra={"duration_seconds": duration})
-        return result
+        return _run_timed_check("security", _run_security_checks, repo_path, ensure)
     
     def run_style():
-        start_time = time.time()
-        logger.debug("Starting style analysis")
-        result = _run_style_checks_parallel(repo_path, linters, max_workers=3)
-        duration = time.time() - start_time
-        metrics.record_histogram("pr_analysis_check_duration_seconds", duration, tags={"check_type": "style"})
-        logger.debug("Style analysis completed", extra={"duration_seconds": duration})
-        return result
+        return _run_timed_check("style", _run_style_checks_parallel, repo_path, linters, 3)
     
     def run_performance():
-        start_time = time.time()
-        logger.debug("Starting performance analysis")
-        result = _run_performance_checks(repo_path, ensure)
-        duration = time.time() - start_time
-        metrics.record_histogram("pr_analysis_check_duration_seconds", duration, tags={"check_type": "performance"})
-        logger.debug("Performance analysis completed", extra={"duration_seconds": duration})
-        return result
+        return _run_timed_check("performance", _run_performance_checks, repo_path, ensure)
     
     # Execute all checks in parallel
     with ThreadPoolExecutor(max_workers=3) as executor:
