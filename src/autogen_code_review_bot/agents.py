@@ -10,6 +10,8 @@ from typing import List, Dict, Optional
 
 import yaml
 
+from .agent_templates import default_templates
+
 # Configuration error class (will be imported from config_validation when needed)
 class ConfigError(Exception):
     """Configuration error for agent loading."""
@@ -102,6 +104,15 @@ def load_agents_from_yaml(path: str) -> Dict[str, BaseAgent]:
 
     if not agents:
         logger.warning("No agents were configured")
+    
+    # Load response templates if configured
+    if "response_templates" in data:
+        try:
+            default_templates.load_from_config(data["response_templates"])
+            logger.info("Successfully loaded custom response templates", 
+                       extra={"available_templates": default_templates.get_available_templates()})
+        except Exception as e:
+            logger.warning(f"Failed to load response templates, using defaults: {e}")
     
     return agents
 
@@ -252,27 +263,29 @@ class ConversationManager:
         )
     
     def _generate_agent_response(self, agent: BaseAgent, code: str, context: List[str]) -> str:
-        """Generate a response from an agent based on context."""
+        """Generate a response from an agent based on context using configurable templates."""
         # This is a simplified implementation - in a real system, 
         # this would call an LLM API with the agent's personality
         
         context_str = "\n".join(context[-3:])  # Last 3 turns for context
         
-        # Simple response generation based on agent type and context
+        # Determine agent type and select appropriate template category
         if isinstance(agent, CoderAgent):
-            responses = [
-                f"Looking at the code implementation, I notice potential improvements in {random.choice(['performance', 'error handling', 'edge cases'])}",
-                f"From a coding perspective, this {random.choice(['looks solid', 'needs refactoring', 'has bugs'])}",
-                f"I {random.choice(['agree', 'disagree'])} with the previous assessment regarding the implementation"
-            ]
+            agent_type = "coder"
+            # Select template category based on context or randomly
+            template_categories = ["improvement_focused", "assessment", "agreement"]
         else:  # ReviewerAgent
-            responses = [
-                f"From a review standpoint, I'm {random.choice(['concerned about', 'satisfied with'])} the {random.choice(['security', 'maintainability', 'readability'])} aspects",
-                f"The code review indicates {random.choice(['good practices', 'areas for improvement', 'security concerns'])}",
-                f"I {random.choice(['concur', 'have reservations'])} about the current approach"
-            ]
+            agent_type = "reviewer"
+            template_categories = ["concern_focused", "findings", "opinion"]
         
-        return random.choice(responses)
+        # Randomly select a template category
+        template_category = random.choice(template_categories)
+        
+        try:
+            return default_templates.get_response(agent_type, template_category)
+        except ValueError as e:
+            # Fallback to a generic response if template system fails
+            return f"Agent {agent.name} provided feedback on the code implementation."
     
     def _generate_conversation_summary(self, conversation: AgentConversation) -> str:
         """Generate a summary of the conversation."""
