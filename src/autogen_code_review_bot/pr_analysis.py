@@ -77,25 +77,53 @@ def load_linter_config(config_path: str | Path | None = None) -> Dict[str, str]:
 
 
 
-def _detect_repo_languages(repo_path: str | Path) -> Set[str]:
-    """Return a set of languages present in ``repo_path``."""
+def _detect_repo_languages(repo_path: str | Path, max_files: int = 10000) -> Set[str]:
+    """Return a set of languages present in ``repo_path``.
+    
+    Args:
+        repo_path: Path to the repository to analyze
+        max_files: Maximum number of files to scan (default: 10,000)
+        
+    Returns:
+        Set of detected programming languages
+    """
 
     repo_path = Path(repo_path)
     languages: Set[str] = set()
     file_count = 0
+    
     for root, _, files in os.walk(repo_path):
         for name in files:
+            # Early exit condition to prevent excessive memory usage
+            if file_count >= max_files:
+                logger.warning(
+                    f"Language detection stopped - reached file limit of {max_files}",
+                    extra={
+                        "files_scanned": file_count,
+                        "max_files": max_files,
+                        "repo_path": str(repo_path),
+                        "languages_found": list(languages)
+                    }
+                )
+                break
+                
             file_path = Path(root) / name
             lang = detect_language(file_path)
             if lang != "unknown":
                 languages.add(lang)
             file_count += 1
+        else:
+            # Continue outer loop if inner loop wasn't broken
+            continue
+        # Break outer loop if inner loop was broken
+        break
     
     logger.debug("Language detection completed", 
                 extra={
                     "languages": list(languages), 
                     "files_scanned": file_count,
-                    "repo_path": str(repo_path)
+                    "repo_path": str(repo_path),
+                    "limit_reached": file_count >= max_files
                 })
     return languages
 
