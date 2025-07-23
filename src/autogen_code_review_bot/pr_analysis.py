@@ -337,13 +337,28 @@ def _validate_command_safety(cmd: List[str]) -> bool:
         
     # Check if executable is in allowlist
     executable = cmd[0]
-    executable_name = Path(executable).name
     
-    if executable_name not in ALLOWED_EXECUTABLES:
+    # Resolve executable path to detect traversal attempts
+    try:
+        resolved_executable = Path(executable).resolve()
+        executable_name = resolved_executable.name
+        
+        # Only allow if executable name matches allowlist exactly
+        if executable_name not in ALLOWED_EXECUTABLES:
+            return False
+            
+        # Reject any path that contains directory traversal
+        # Only allow simple executable names or absolute paths to standard locations
+        if '/' in executable or '\\' in executable:
+            # For security, reject any path-based executable references
+            # Only allow direct executable names that will be resolved via PATH
+            return False
+            
+    except (OSError, ValueError):
         return False
     
     # Check for shell metacharacters in arguments
-    dangerous_chars = ['&', '|', ';', '$', '`', '>', '<', '"', "'", '\\']
+    dangerous_chars = ['&', '|', ';', '$', '`', '>', '<', '"', "'", '\\', '\x00']
     for arg in cmd:
         if any(char in str(arg) for char in dangerous_chars):
             return False
@@ -351,26 +366,116 @@ def _validate_command_safety(cmd: List[str]) -> bool:
     return True
 
 
-def _validate_path_safety(path: str) -> bool:
+def _validate_path_safety(path: str, project_root: str = None) -> bool:
     """Validate that path is safe and doesn't contain traversal attempts.
     
     Args:
         path: File system path to validate
+        project_root: Optional project root to validate against
         
     Returns:
         True if path is safe, False otherwise
     """
     if not path or not isinstance(path, str):
         return False
+    
+    # Check for null bytes and other dangerous characters
+    if '\x00' in path or '\r' in path or '\n' in path or '\t' in path:
+        return False
         
-    # Resolve path to detect traversal attempts
+    # Check for URL encoding attempts
+    if '%' in path and any(x in path.lower() for x in ['%2e', '%2f', '%5c']):
+        return False
+    
+    # Check path length to prevent buffer overflow attempts
+    if len(path) > 4096:
+        return False
+        
     try:
+        # Resolve path to detect traversal attempts and symlink following
         resolved_path = Path(path).resolve()
-        # Check for obvious traversal patterns
-        if ".." in str(resolved_path) or str(resolved_path).startswith("/etc"):
-            return False
+        path_str = str(resolved_path)
+        
+        # Define sensitive directories that should never be accessible
+        sensitive_prefixes = [
+            "/etc/", "/proc/", "/sys/", "/dev/",
+            "/home/", "/var/log/", "/usr/bin/", "/usr/sbin/",
+            "/bin/", "/sbin/", "/.ssh/", "/tmp/",
+            "C:\\Windows\\", "C:\\Users\\", "C:\\Program Files\\"
+        ]
+        
+        # Check if resolved path points to sensitive locations
+        # Only check if path starts with these sensitive directories, but allow
+        # exceptions when there's a valid project_root containing the path
+        for prefix in sensitive_prefixes:
+            if path_str.startswith(prefix):
+                # If we have a project_root, check if this is within allowed boundaries
+                if project_root:
+                    try:
+                        project_resolved = Path(project_root).resolve()
+                        resolved_path.relative_to(project_resolved)
+                        # Path is within project boundaries, allow it even if in sensitive location
+                        continue
+                    except ValueError:
+                        # Path is outside project root and in sensitive location - reject
+                        return False
+                else:
+                    # No project root context and in sensitive location - reject
+                    return False
+        
+        # Special case for /root/ - only block if not in a development context
+        # Allow /root/repo/ and subdirectories for development, but block direct /root/ access
+        if path_str.startswith("/root/") and not any(allowed in path_str for allowed in ["/root/repo", "/root/workspace", "/root/project"]):
+            # If we have a project_root, check if this is within allowed boundaries
+            if project_root:
+                try:
+                    project_resolved = Path(project_root).resolve()
+                    resolved_path.relative_to(project_resolved)
+                    # Path is within project boundaries, allow it
+                except ValueError:
+                    # Path is outside project root - reject
+                    return False
+            else:
+                # No project root context - reject direct /root/ access
+                return False
+        
+        # If project_root is provided, ensure path is within project boundaries
+        if project_root:
+            try:
+                project_resolved = Path(project_root).resolve()
+                # Check if resolved path is within project root
+                try:
+                    resolved_path.relative_to(project_resolved)
+                except ValueError:
+                    # Path is outside project root
+                    return False
+            except (OSError, ValueError):
+                return False
+        
+        # Additional checks for traversal patterns that might survive resolution
+        dangerous_patterns = ['../', '..\\', '..\\//', '..\\..', '....']
+        for pattern in dangerous_patterns:
+            if pattern in path or pattern in path_str:
+                return False
+                
+        # Check for symlink that might point outside allowed areas
+        original_path = Path(path)
+        if original_path.is_symlink():
+            # For symlinks, we need to be extra careful
+            # Only allow symlinks that resolve to safe locations within project
+            if project_root:
+                try:
+                    resolved_path.relative_to(Path(project_root).resolve())
+                except ValueError:
+                    return False
+            else:
+                # Without project root context, reject all symlinks for safety
+                return False
+        
         return True
-    except (OSError, ValueError):
+        
+    except (OSError, ValueError, RuntimeError):
+        # Any error in path resolution is treated as unsafe
         return False
 
 
@@ -424,7 +529,7 @@ def _run_single_linter(lang: str, tool: str, repo_path: str) -> tuple[str, str]:
     if tool == "ruff":
         cmd.append("check")
     cmd.append(repo_path)
-    output = ensure(tool) or _run_command(cmd, cwd=repo_path)
+    output = ensure(tool) or _run_command(cmd, cwd=repo_path, project_root=repo_path)
     return tool, output
 
 
@@ -484,11 +589,11 @@ def _run_style_checks_parallel(repo_path: str, linters: Dict[str, str], max_work
 
 
 def _run_security_checks(repo_path: str, ensure) -> str:
-    return ensure("bandit") or _run_command(["bandit", "-r", repo_path, "-q"], cwd=repo_path)
+    return ensure("bandit") or _run_command(["bandit", "-r", repo_path, "-q"], cwd=repo_path, project_root=repo_path)
 
 
 def _run_performance_checks(repo_path: str, ensure) -> str:
-    return ensure("radon") or _run_command(["radon", "cc", "-s", "-a", repo_path], cwd=repo_path)
+    return ensure("radon") or _run_command(["radon", "cc", "-s", "-a", repo_path], cwd=repo_path, project_root=repo_path)
 
 
 def _run_all_checks_parallel(repo_path: str, linters: Dict[str, str]) -> PRAnalysisResult:

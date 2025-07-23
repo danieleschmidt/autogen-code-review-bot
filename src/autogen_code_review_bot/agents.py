@@ -293,13 +293,13 @@ class ConversationManager:
 def run_dual_review(code: str, config_path: str) -> Dict[str, str]:
     """Run the dual-agent review process using the configuration at ``config_path``."""
     agents = load_agents_from_yaml(config_path)
-    coder: CoderAgent = agents.get("coder")  # type: ignore
-    reviewer: ReviewerAgent = agents.get("reviewer")  # type: ignore
+    coder: Optional[CoderAgent] = agents.get("coder")
+    reviewer: Optional[ReviewerAgent] = agents.get("reviewer")
 
     feedback = {}
-    if coder:
+    if coder is not None:
         feedback["coder"] = coder.review(code)
-    if reviewer:
+    if reviewer is not None:
         feedback["reviewer"] = reviewer.review(code)
     return feedback
 
@@ -311,7 +311,20 @@ def run_agent_conversation(code: str, config_path: str) -> str:
     
     if len(agents_list) < 2:
         # Fall back to simple review if not enough agents
-        return str(run_dual_review(code, config_path))
+        dual_result = run_dual_review(code, config_path)
+        if not dual_result:
+            return "No agents available for code review. Please check your configuration."
+        return str(dual_result)
     
     manager = ConversationManager()
-    return manager.run_conversation(agents_list, code)
+    try:
+        result = manager.run_conversation(agents_list, code)
+        if not result or not result.strip():
+            return "Agent conversation completed but produced no output."
+        return result
+    except Exception as e:
+        # Fallback to dual review if conversation fails
+        dual_result = run_dual_review(code, config_path)
+        if not dual_result:
+            return f"Agent conversation failed and no fallback agents available: {str(e)}"
+        return f"Agent conversation failed, fallback result: {str(dual_result)}"
