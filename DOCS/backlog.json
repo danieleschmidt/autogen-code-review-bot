@@ -1,0 +1,175 @@
+{
+  "backlog": {
+    "format_version": "1.0",
+    "last_updated": "2025-07-23T17:36:42.796317",
+    "scoring_config": {
+      "wsjf_weights": {
+        "user_value": 1.0,
+        "business_value": 1.0,
+        "time_criticality": 1.0,
+        "risk_reduction": 0.8,
+        "opportunity_enablement": 0.6
+      },
+      "effort_scale": [
+        1,
+        2,
+        3,
+        5,
+        8,
+        13
+      ],
+      "impact_scale": [
+        1,
+        2,
+        3,
+        5,
+        8,
+        13
+      ],
+      "aging_multiplier_cap": 2.0,
+      "aging_days_threshold": 30
+    },
+    "items": [
+      {
+        "id": "sample-002",
+        "title": "Add File Count Limits in Language Detection",
+        "description": "Implement early exit conditions and file count limits in _detect_repo_languages to prevent excessive memory usage",
+        "type": "Feature",
+        "status": "READY",
+        "created_date": "2025-07-23T17:36:42.796023",
+        "updated_date": "2025-07-23T17:36:42.796024",
+        "user_value": 5,
+        "business_value": 3,
+        "time_criticality": 3,
+        "risk_reduction": 5,
+        "opportunity_enablement": 2,
+        "effort": 1,
+        "wsjf_score": 16.2,
+        "aging_multiplier": 1.0,
+        "acceptance_criteria": [
+          "Add configurable file count limit (default: 10000 files)",
+          "Implement early exit when limit exceeded",
+          "Log when limits are triggered",
+          "Graceful degradation with partial analysis",
+          "Memory usage remains bounded on large repositories"
+        ],
+        "files": [
+          "src/autogen_code_review_bot/pr_analysis.py"
+        ],
+        "lines_of_interest": [
+          "80-101"
+        ],
+        "linked_items": [],
+        "security_notes": "Prevents resource exhaustion attacks",
+        "test_notes": "Add tests for large repository scenarios",
+        "blocked_reason": "",
+        "escalation_required": false,
+        "escalation_reason": ""
+      },
+      {
+        "id": "sample-001",
+        "title": "Refactor Code Duplication in PR Analysis",
+        "description": "Extract common error result creation into utility functions, consolidate sequential/parallel style check logic",
+        "type": "Refactor",
+        "status": "READY",
+        "created_date": "2025-07-23T17:36:42.796004",
+        "updated_date": "2025-07-23T17:36:42.796011",
+        "user_value": 2,
+        "business_value": 2,
+        "time_criticality": 1,
+        "risk_reduction": 3,
+        "opportunity_enablement": 2,
+        "effort": 1,
+        "wsjf_score": 8.6,
+        "aging_multiplier": 1.0,
+        "acceptance_criteria": [
+          "Extract common error result creation patterns into utility functions",
+          "Consolidate sequential/parallel style check logic",
+          "Maintain existing test coverage",
+          "No functional behavior changes",
+          "Code duplication reduced by >50% in target areas"
+        ],
+        "files": [
+          "src/autogen_code_review_bot/pr_analysis.py"
+        ],
+        "lines_of_interest": [
+          "436-492",
+          "316-831"
+        ],
+        "linked_items": [],
+        "security_notes": "Low risk - isolated refactoring only",
+        "test_notes": "Existing tests should pass without modification",
+        "blocked_reason": "",
+        "escalation_required": false,
+        "escalation_reason": ""
+      },
+      {
+        "id": "sample-003",
+        "title": "Improve Agent Implementation with LLM Integration",
+        "description": "Replace placeholder review methods with actual LLM calls for enhanced code analysis",
+        "type": "Feature",
+        "status": "BLOCKED",
+        "created_date": "2025-07-23T17:36:42.796030",
+        "updated_date": "2025-07-23T17:36:42.796030",
+        "user_value": 8,
+        "business_value": 5,
+        "time_criticality": 3,
+        "risk_reduction": 2,
+        "opportunity_enablement": 8,
+        "effort": 3,
+        "wsjf_score": 7.466666666666668,
+        "aging_multiplier": 1.0,
+        "acceptance_criteria": [
+          "Integrate with LLM API (OpenAI, Claude, etc.)",
+          "Replace placeholder methods with real analysis",
+          "Add configuration for LLM settings",
+          "Implement rate limiting and error handling",
+          "Add comprehensive testing with mocked LLM responses"
+        ],
+        "files": [
+          "src/autogen_code_review_bot/agents.py"
+        ],
+        "lines_of_interest": [],
+        "linked_items": [],
+        "security_notes": "HIGH RISK - Requires API key management, input sanitization, rate limiting",
+        "test_notes": "Mock LLM responses for deterministic testing",
+        "blocked_reason": "Requires human review due to LLM API integration and security implications",
+        "escalation_required": true,
+        "escalation_reason": "LLM API integration requires security review and architectural decisions"
+      }
+    ],
+    "discovered_issues": {
+      "last_scan": "2025-07-23T17:36:42.796474",
+      "todos_found": 0,
+      "fixmes_found": 0,
+      "failing_tests": 0,
+      "security_warnings": 0,
+      "dependency_alerts": 0
+    },
+    "metrics": {
+      "total_items": 3,
+      "by_status": {
+        "NEW": 0,
+        "REFINED": 0,
+        "READY": 2,
+        "DOING": 0,
+        "PR": 0,
+        "MERGED": 0,
+        "DONE": 0,
+        "BLOCKED": 1
+      },
+      "by_type": {
+        "Feature": 2,
+        "Bug": 0,
+        "Refactor": 1,
+        "Security": 0,
+        "Doc": 0
+      },
+      "avg_wsjf": 10.755555555555555,
+      "high_priority_count": 3,
+      "aging_items": 0,
+      "cycle_time_avg": 0.0,
+      "coverage_delta": 0.0
+    }
+  }
+}

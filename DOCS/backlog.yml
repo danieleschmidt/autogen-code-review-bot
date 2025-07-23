@@ -1,0 +1,224 @@
+---
+backlog:
+  format_version: "1.0"
+  last_updated: "2025-07-23T00:00:00Z"
+  scoring_config:
+    wsjf_weights:
+      user_value: 1.0
+      business_value: 1.0
+      time_criticality: 1.0
+      risk_reduction: 0.8
+      opportunity_enablement: 0.6
+    effort_scale: [1, 2, 3, 5, 8, 13]  # Fibonacci-like scale
+    impact_scale: [1, 2, 3, 5, 8, 13]
+    aging_multiplier_cap: 2.0
+    aging_days_threshold: 30
+  
+  items:
+    - id: "bl-001"
+      title: "Refactor Code Duplication in PR Analysis"
+      description: "Extract common error result creation into utility functions, consolidate sequential/parallel style check logic"
+      type: "Refactor"
+      status: "READY"
+      created_date: "2025-07-23T00:00:00Z"
+      updated_date: "2025-07-23T00:00:00Z"
+      
+      # Cost of Delay Components (1-13 scale)
+      user_value: 2  # Medium - improves maintainability for developers
+      business_value: 2  # Medium - reduces long-term technical debt
+      time_criticality: 1  # Low - no urgent timeline
+      risk_reduction: 3  # Medium - reduces risk of bugs from duplicated logic
+      opportunity_enablement: 2  # Low-Medium - enables easier future changes
+      
+      effort: 1  # Easy - straightforward refactoring
+      wsjf_score: 2.0  # (2+2+1+3*0.8+2*0.6) / 1 = 8.6/1 but normalized
+      aging_multiplier: 1.0
+      
+      acceptance_criteria:
+        - "Extract common error result creation patterns into utility functions"
+        - "Consolidate sequential/parallel style check logic"
+        - "Maintain existing test coverage"
+        - "No functional behavior changes"
+        - "Code duplication reduced by >50% in target areas"
+      
+      files:
+        - "src/autogen_code_review_bot/pr_analysis.py"
+      
+      lines_of_interest:
+        - "436-492"
+        - "316-831"
+      
+      linked_items: []
+      security_notes: "Low risk - isolated refactoring only"
+      test_notes: "Existing tests should pass without modification"
+      
+    - id: "bl-002"
+      title: "Add File Count Limits in Language Detection"
+      description: "Implement early exit conditions and file count limits in _detect_repo_languages to prevent excessive memory usage"
+      type: "Feature"
+      status: "READY"
+      created_date: "2025-07-23T00:00:00Z"
+      updated_date: "2025-07-23T00:00:00Z"
+      
+      # Cost of Delay Components
+      user_value: 5  # High - prevents performance issues for users
+      business_value: 3  # Medium - prevents resource exhaustion
+      time_criticality: 3  # Medium - performance issues affect user experience
+      risk_reduction: 5  # High - prevents memory issues on large repos
+      opportunity_enablement: 2  # Low-Medium - enables processing larger repos
+      
+      effort: 1  # Easy - simple limit checking
+      wsjf_score: 3.0
+      aging_multiplier: 1.0
+      
+      acceptance_criteria:
+        - "Add configurable file count limit (default: 10000 files)"
+        - "Implement early exit when limit exceeded"
+        - "Log when limits are triggered"
+        - "Graceful degradation with partial analysis"
+        - "Memory usage remains bounded on large repositories"
+      
+      files:
+        - "src/autogen_code_review_bot/pr_analysis.py"
+      
+      lines_of_interest:
+        - "80-101"
+      
+      linked_items: []
+      security_notes: "Prevents resource exhaustion attacks"
+      test_notes: "Add tests for large repository scenarios"
+      
+    - id: "bl-003"
+      title: "Standardize Error Handling Patterns"
+      description: "Create consistent error handling patterns across modules (some use exceptions, others return error strings)"
+      type: "Refactor"
+      status: "NEW"
+      created_date: "2025-07-23T00:00:00Z"
+      updated_date: "2025-07-23T00:00:00Z"
+      
+      # Cost of Delay Components
+      user_value: 3  # Medium - better error messages for users
+      business_value: 3  # Medium - improved reliability
+      time_criticality: 2  # Low-Medium - not urgent but important
+      risk_reduction: 3  # Medium - consistent error handling reduces bugs
+      opportunity_enablement: 3  # Medium - enables better debugging and monitoring
+      
+      effort: 2  # Medium - requires cross-module changes
+      wsjf_score: 1.5
+      aging_multiplier: 1.0
+      
+      acceptance_criteria:
+        - "Define standard error handling patterns"
+        - "Create common error types/classes"
+        - "Update all modules to use consistent patterns"
+        - "Maintain backward compatibility where possible"
+        - "Add comprehensive error handling tests"
+      
+      files:
+        - "src/autogen_code_review_bot/*.py"
+      
+      linked_items: []
+      security_notes: "Ensure error messages don't leak sensitive information"
+      test_notes: "Add error handling tests for each module"
+      
+    - id: "bl-004"
+      title: "Extract Agent Response Templates"
+      description: "Extract hardcoded response templates from agents into configurable template system"
+      type: "Feature"
+      status: "NEW"
+      created_date: "2025-07-23T00:00:00Z"
+      updated_date: "2025-07-23T00:00:00Z"
+      
+      # Cost of Delay Components
+      user_value: 2  # Low-Medium - configurability
+      business_value: 2  # Low-Medium - maintainability
+      time_criticality: 1  # Low - not urgent
+      risk_reduction: 2  # Low-Medium - reduces hardcoded strings
+      opportunity_enablement: 3  # Medium - enables customization and localization
+      
+      effort: 2  # Medium - template system design
+      wsjf_score: 1.0
+      aging_multiplier: 1.0
+      
+      acceptance_criteria:
+        - "Create template system for agent responses"
+        - "Extract hardcoded templates from agents.py"
+        - "Support template variables/substitution"
+        - "Maintain existing response functionality"
+        - "Add template validation"
+      
+      files:
+        - "src/autogen_code_review_bot/agents.py"
+      
+      lines_of_interest:
+        - "254-276"
+      
+      linked_items: []
+      security_notes: "Validate template inputs to prevent injection"
+      test_notes: "Test template rendering and validation"
+      
+    - id: "bl-005"
+      title: "Improve Agent Implementation with LLM Integration"
+      description: "Replace placeholder review methods with actual LLM calls for enhanced code analysis"
+      type: "Feature"
+      status: "BLOCKED"
+      created_date: "2025-07-23T00:00:00Z"
+      updated_date: "2025-07-23T00:00:00Z"
+      blocked_reason: "Requires human review due to LLM API integration and security implications"
+      
+      # Cost of Delay Components
+      user_value: 8  # High - core feature enhancement
+      business_value: 5  # High - significant value proposition
+      time_criticality: 3  # Medium - important for competitive advantage
+      risk_reduction: 2  # Low-Medium - replaces placeholders
+      opportunity_enablement: 8  # High - enables AI-powered code review
+      
+      effort: 3  # Complex - requires LLM integration
+      wsjf_score: 4.0  # High priority but blocked
+      aging_multiplier: 1.0
+      
+      acceptance_criteria:
+        - "Integrate with LLM API (OpenAI, Claude, etc.)"
+        - "Replace placeholder methods with real analysis"
+        - "Add configuration for LLM settings"
+        - "Implement rate limiting and error handling"
+        - "Add comprehensive testing with mocked LLM responses"
+      
+      files:
+        - "src/autogen_code_review_bot/agents.py"
+      
+      linked_items: []
+      security_notes: "HIGH RISK - Requires API key management, input sanitization, rate limiting"
+      test_notes: "Mock LLM responses for deterministic testing"
+      escalation_required: true
+      escalation_reason: "LLM API integration requires security review and architectural decisions"
+
+  # Discovery pipeline results
+  discovered_issues:
+    todos_found: 0
+    fixmes_found: 0
+    failing_tests: 0
+    security_warnings: 0
+    dependency_alerts: 0
+    last_scan: "2025-07-23T00:00:00Z"
+  
+  # Metrics
+  metrics:
+    total_items: 5
+    by_status:
+      NEW: 2
+      READY: 2
+      DOING: 0
+      PR: 0
+      MERGED: 0
+      DONE: 0
+      BLOCKED: 1
+    by_type:
+      Feature: 3
+      Refactor: 2
+      Bug: 0
+      Security: 0
+      Doc: 0
+    avg_wsjf: 2.3
+    high_priority_count: 2  # WSJF > 2.0
+    aging_items: 0
