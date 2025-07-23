@@ -16,6 +16,7 @@ from .caching import LinterCache, get_commit_hash, InvalidationStrategy
 from .logging_config import get_logger
 from .agents import run_agent_conversation
 from .monitoring import MetricsEmitter
+from .exceptions import AnalysisError, ValidationError, ToolError
 
 # Default mapping of languages to linter executables
 DEFAULT_LINTERS: Dict[str, str] = {
@@ -77,25 +78,53 @@ def load_linter_config(config_path: str | Path | None = None) -> Dict[str, str]:
 
 
 
-def _detect_repo_languages(repo_path: str | Path) -> Set[str]:
-    """Return a set of languages present in ``repo_path``."""
+def _detect_repo_languages(repo_path: str | Path, max_files: int = 10000) -> Set[str]:
+    """Return a set of languages present in ``repo_path``.
+    
+    Args:
+        repo_path: Path to the repository to analyze
+        max_files: Maximum number of files to scan (default: 10,000)
+        
+    Returns:
+        Set of detected programming languages
+    """
 
     repo_path = Path(repo_path)
     languages: Set[str] = set()
     file_count = 0
+    
     for root, _, files in os.walk(repo_path):
         for name in files:
+            # Early exit condition to prevent excessive memory usage
+            if file_count >= max_files:
+                logger.warning(
+                    f"Language detection stopped - reached file limit of {max_files}",
+                    extra={
+                        "files_scanned": file_count,
+                        "max_files": max_files,
+                        "repo_path": str(repo_path),
+                        "languages_found": list(languages)
+                    }
+                )
+                break
+                
             file_path = Path(root) / name
             lang = detect_language(file_path)
             if lang != "unknown":
                 languages.add(lang)
             file_count += 1
+        else:
+            # Continue outer loop if inner loop wasn't broken
+            continue
+        # Break outer loop if inner loop was broken
+        break
     
     logger.debug("Language detection completed", 
                 extra={
                     "languages": list(languages), 
                     "files_scanned": file_count,
-                    "repo_path": str(repo_path)
+                    "repo_path": str(repo_path),
+                    "limit_reached": file_count >= max_files
                 })
     return languages
 
@@ -311,7 +340,7 @@ def _analyze_pr_streaming(repo_path: str, linters: Dict[str, str], use_cache: bo
         
     except Exception as exc:
         logger.error("Streaming analysis failed", extra={"error": str(exc)})
-        return _create_error_result(f"streaming analysis error: {exc}")
+        raise AnalysisError(f"Streaming analysis error: {exc}") from exc
 
 
 DEFAULT_TIMEOUT = 30
@@ -479,22 +508,40 @@ def _validate_path_safety(path: str, project_root: str = None) -> bool:
         return False
 
 
-def _run_command(cmd: List[str], cwd: str, timeout: int = DEFAULT_TIMEOUT) -> str:
+def _run_command(cmd: List[str], cwd: str, timeout: int = DEFAULT_TIMEOUT, project_root: str | None = None) -> str:
     """Execute ``cmd`` in ``cwd`` and return combined output.
     
     Security: Validates command safety and path traversal prevention.
+    
+    Args:
+        cmd: Command and arguments to execute
+        cwd: Working directory for command execution
+        timeout: Command timeout in seconds
+        project_root: Project root path for security validation
+        
+    Returns:
+        Combined stdout/stderr output from command
+        
+    Raises:
+        ValidationError: If command or path validation fails
+        ToolError: If command execution fails
     """
     # Validate command safety
     if not _validate_command_safety(cmd):
-        return f"unsafe command rejected: {cmd[0] if cmd else 'empty'}"
+        logger.error("Unsafe command rejected", 
+                    extra={"command": cmd[0] if cmd else 'empty', "full_cmd": cmd})
+        raise ValidationError(f"Unsafe command rejected: {cmd[0] if cmd else 'empty'}")
         
     # Validate working directory path
-    if not _validate_path_safety(cwd):
-        return "unsafe working directory path rejected"
+    if not _validate_path_safety(cwd, project_root):
+        logger.error("Unsafe working directory path rejected", 
+                    extra={"cwd": cwd, "project_root": project_root})
+        raise ValidationError(f"Unsafe working directory path rejected: {cwd}")
         
     # Ensure working directory exists
     if not Path(cwd).is_dir():
-        return "working directory does not exist"
+        logger.error("Working directory does not exist", extra={"cwd": cwd})
+        raise ValidationError(f"Working directory does not exist: {cwd}")
 
     try:
         completed = run(  # nosec B603 - command is validated against allowlist
@@ -506,31 +553,73 @@ def _run_command(cmd: List[str], cwd: str, timeout: int = DEFAULT_TIMEOUT) -> st
             timeout=timeout,
             shell=False,  # Explicitly disable shell to prevent injection
         )
+        logger.debug("Command executed successfully", 
+                    extra={"command": cmd[0], "cwd": cwd, "output_length": len(completed.stdout)})
         return completed.stdout.strip()
-    except TimeoutExpired:
-        return "timed out"
+    except TimeoutExpired as exc:
+        logger.error("Command timed out", 
+                    extra={"command": cmd[0], "timeout": timeout, "cwd": cwd})
+        raise ToolError(f"Command '{cmd[0]}' timed out after {timeout}s") from exc
     except CalledProcessError as exc:  # pragma: no cover - runtime feedback
         output = exc.stdout or ""
         err = exc.stderr or ""
-        return (output + "\n" + err).strip()
+        combined_output = (output + "\n" + err).strip()
+        logger.warning("Command returned non-zero exit code", 
+                      extra={
+                          "command": cmd[0], 
+                          "exit_code": exc.returncode,
+                          "cwd": cwd,
+                          "output_length": len(combined_output)
+                      })
+        # For linter tools, non-zero exit often means issues found, not failure
+        return combined_output
     except (OSError, FileNotFoundError) as exc:
-        return f"execution error: {exc}"
+        logger.error("Command execution failed", 
+                    extra={"command": cmd[0], "cwd": cwd, "error": str(exc)})
+        raise ToolError(f"Failed to execute '{cmd[0]}': {exc}") from exc
 
 
 def _run_single_linter(lang: str, tool: str, repo_path: str) -> tuple[str, str]:
-    """Run a single linter for a language and return (tool_name, output)."""
+    """Run a single linter for a language and return (tool_name, output).
+    
+    Args:
+        lang: Programming language name
+        tool: Linter tool name
+        repo_path: Repository path to analyze
+        
+    Returns:
+        Tuple of (tool_name, output_text)
+        
+    Raises:
+        ToolError: If linter execution fails
+        ValidationError: If paths or commands are invalid
+    """
     def ensure(tool: str) -> str:
         return "not installed" if which(tool) is None else ""
     
     if not tool:
         return "", ""
     
+    # Check if tool is installed
+    installation_check = ensure(tool)
+    if installation_check:
+        logger.warning("Linter tool not available", 
+                      extra={"tool": tool, "language": lang, "status": installation_check})
+        return tool, installation_check
+    
     cmd = [tool]
     if tool == "ruff":
         cmd.append("check")
     cmd.append(repo_path)
-    output = ensure(tool) or _run_command(cmd, cwd=repo_path, project_root=repo_path)
-    return tool, output
+    
+    try:
+        output = _run_command(cmd, cwd=repo_path, project_root=repo_path)
+        return tool, output
+    except (ToolError, ValidationError) as exc:
+        logger.error("Linter execution failed", 
+                    extra={"tool": tool, "language": lang, "error": str(exc)})
+        # Re-raise with more context
+        raise ToolError(f"Failed to run {tool} for {lang}: {exc}") from exc
 
 
 def _run_style_checks(repo_path: str, linters: Dict[str, str]) -> tuple[str, str]:
@@ -589,16 +678,82 @@ def _run_style_checks_parallel(repo_path: str, linters: Dict[str, str], max_work
 
 
 def _run_security_checks(repo_path: str, ensure) -> str:
-    return ensure("bandit") or _run_command(["bandit", "-r", repo_path, "-q"], cwd=repo_path, project_root=repo_path)
+    """Run security analysis checks on the repository.
+    
+    Args:
+        repo_path: Path to repository to analyze
+        ensure: Function to check tool availability
+        
+    Returns:
+        Security analysis output
+        
+    Raises:
+        ToolError: If security tool execution fails
+        ValidationError: If paths are invalid
+    """
+    installation_check = ensure("bandit")
+    if installation_check:
+        logger.warning("Security tool not available", 
+                      extra={"tool": "bandit", "status": installation_check})
+        return installation_check
+    
+    try:
+        return _run_command(["bandit", "-r", repo_path, "-q"], cwd=repo_path, project_root=repo_path)
+    except (ToolError, ValidationError) as exc:
+        logger.error("Security analysis failed", extra={"tool": "bandit", "error": str(exc)})
+        raise ToolError(f"Security analysis failed: {exc}") from exc
 
 
 def _run_performance_checks(repo_path: str, ensure) -> str:
-    return ensure("radon") or _run_command(["radon", "cc", "-s", "-a", repo_path], cwd=repo_path, project_root=repo_path)
+    """Run performance analysis checks on the repository.
+    
+    Args:
+        repo_path: Path to repository to analyze
+        ensure: Function to check tool availability
+        
+    Returns:
+        Performance analysis output
+        
+    Raises:
+        ToolError: If performance tool execution fails
+        ValidationError: If paths are invalid
+    """
+    installation_check = ensure("radon")
+    if installation_check:
+        logger.warning("Performance tool not available", 
+                      extra={"tool": "radon", "status": installation_check})
+        return installation_check
+    
+    try:
+        return _run_command(["radon", "cc", "-s", "-a", repo_path], cwd=repo_path, project_root=repo_path)
+    except (ToolError, ValidationError) as exc:
+        logger.error("Performance analysis failed", extra={"tool": "radon", "error": str(exc)})
+        raise ToolError(f"Performance analysis failed: {exc}") from exc
+
+
+def _run_timed_check(check_type: str, check_func, *args):
+    """Run a check function with timing and metrics recording.
+    
+    Args:
+        check_type: Type of check (security, style, performance) for logging/metrics
+        check_func: Function to execute
+        *args: Arguments to pass to check_func
+        
+    Returns:
+        Result from check_func
+    """
+    import time
+    start_time = time.time()
+    logger.debug(f"Starting {check_type} analysis")
+    result = check_func(*args)
+    duration = time.time() - start_time
+    metrics.record_histogram("pr_analysis_check_duration_seconds", duration, tags={"check_type": check_type})
+    logger.debug(f"{check_type.capitalize()} analysis completed", extra={"duration_seconds": duration})
+    return result
 
 
 def _run_all_checks_parallel(repo_path: str, linters: Dict[str, str]) -> PRAnalysisResult:
     """Run all analysis checks (security, style, performance) in parallel."""
-    import time
     logger.debug("Starting parallel analysis checks", extra={"repo_path": repo_path, "linters": linters})
     
     def ensure(tool: str) -> str:
@@ -607,33 +762,15 @@ def _run_all_checks_parallel(repo_path: str, linters: Dict[str, str]) -> PRAnaly
             return f"tool '{tool}' not allowed"
         return "not installed" if which(tool) is None else ""
     
-    # Define check functions with timing
+    # Define check functions using the timing utility
     def run_security():
-        start_time = time.time()
-        logger.debug("Starting security analysis")
-        result = _run_security_checks(repo_path, ensure)
-        duration = time.time() - start_time
-        metrics.record_histogram("pr_analysis_check_duration_seconds", duration, tags={"check_type": "security"})
-        logger.debug("Security analysis completed", extra={"duration_seconds": duration})
-        return result
+        return _run_timed_check("security", _run_security_checks, repo_path, ensure)
     
     def run_style():
-        start_time = time.time()
-        logger.debug("Starting style analysis")
-        result = _run_style_checks_parallel(repo_path, linters, max_workers=3)
-        duration = time.time() - start_time
-        metrics.record_histogram("pr_analysis_check_duration_seconds", duration, tags={"check_type": "style"})
-        logger.debug("Style analysis completed", extra={"duration_seconds": duration})
-        return result
+        return _run_timed_check("style", _run_style_checks_parallel, repo_path, linters, 3)
     
     def run_performance():
-        start_time = time.time()
-        logger.debug("Starting performance analysis")
-        result = _run_performance_checks(repo_path, ensure)
-        duration = time.time() - start_time
-        metrics.record_histogram("pr_analysis_check_duration_seconds", duration, tags={"check_type": "performance"})
-        logger.debug("Performance analysis completed", extra={"duration_seconds": duration})
-        return result
+        return _run_timed_check("performance", _run_performance_checks, repo_path, ensure)
     
     # Execute all checks in parallel
     with ThreadPoolExecutor(max_workers=3) as executor:
@@ -649,12 +786,18 @@ def _run_all_checks_parallel(repo_path: str, linters: Dict[str, str]) -> PRAnaly
             style_tool, style_output = style_future.result()
             performance_output = performance_future.result()
             logger.debug("All parallel analysis tasks completed successfully")
+        except (ToolError, ValidationError, AnalysisError) as exc:
+            # Re-raise specific analysis errors with context
+            logger.error("Analysis task failed", 
+                        extra={"error_type": type(exc).__name__, "error": str(exc)})
+            metrics.record_counter("pr_analysis_errors_total", 1, tags={"error_type": type(exc).__name__})
+            raise AnalysisError(f"Analysis failed during parallel execution: {exc}") from exc
         except Exception as exc:
-            # If any check fails, return error result
-            logger.error("Parallel execution failed", extra={"error": str(exc)})
-            # Record parallel execution error metrics
-            metrics.record_counter("pr_analysis_errors_total", 1, tags={"error_type": "parallel_execution"})
-            return _create_error_result(f"parallel execution error: {exc}")
+            # Handle unexpected errors
+            logger.error("Unexpected error in parallel execution", 
+                        extra={"error_type": type(exc).__name__, "error": str(exc)})
+            metrics.record_counter("pr_analysis_errors_total", 1, tags={"error_type": "unexpected"})
+            raise AnalysisError(f"Unexpected error during analysis: {exc}") from exc
     
     return PRAnalysisResult(
         security=AnalysisSection(tool="bandit", output=security_output),
@@ -702,13 +845,13 @@ def analyze_pr(repo_path: str, config_path: str | None = None, use_cache: bool =
         logger.error("Invalid repository path provided", extra={"repo_path": repo_path})
         # Record error metrics
         metrics.record_counter("pr_analysis_errors_total", 1, tags={"error_type": "invalid_path"})
-        return _create_error_result("invalid repository path")
+        raise ValidationError("Invalid repository path: must be a non-empty string")
     
     if not _validate_path_safety(repo_path):
         logger.error("Unsafe repository path rejected", extra={"repo_path": repo_path})
         # Record security error metrics
         metrics.record_counter("pr_analysis_errors_total", 1, tags={"error_type": "unsafe_path"})
-        return _create_error_result("unsafe repository path rejected")
+        raise ValidationError(f"Unsafe repository path rejected: {repo_path}")
     
     repo_path_obj = Path(repo_path)
     if not repo_path_obj.exists() or not repo_path_obj.is_dir():
@@ -720,7 +863,7 @@ def analyze_pr(repo_path: str, config_path: str | None = None, use_cache: bool =
                     })
         # Record validation error metrics
         metrics.record_counter("pr_analysis_errors_total", 1, tags={"error_type": "path_validation"})
-        return _create_error_result("repository path does not exist or is not a directory")
+        raise ValidationError(f"Repository path does not exist or is not a directory: {repo_path}")
 
     logger.debug("Loading linter configuration", extra={"config_path": config_path})
     linters = load_linter_config(config_path)
