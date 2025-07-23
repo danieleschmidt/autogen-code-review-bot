@@ -343,10 +343,21 @@ class MetricValue:
 class MetricsEmitter:
     """Collects and manages application metrics."""
     
-    def __init__(self):
+    def __init__(self, auto_cleanup_enabled: bool = False, auto_cleanup_hours: float = 24.0, auto_cleanup_interval: int = 3600):
         self.metrics: Dict[str, List[MetricValue]] = {}
         self._lock = threading.RLock()
         self.max_values_per_metric = 1000  # Limit memory usage
+        
+        # Automatic cleanup configuration
+        self.auto_cleanup_enabled = auto_cleanup_enabled
+        self.auto_cleanup_hours = auto_cleanup_hours
+        self.auto_cleanup_interval = auto_cleanup_interval
+        self._cleanup_thread: Optional[threading.Thread] = None
+        self._cleanup_stop_event = threading.Event()
+        
+        # Start automatic cleanup if enabled
+        if auto_cleanup_enabled:
+            self.start_auto_cleanup(auto_cleanup_hours, auto_cleanup_interval)
     
     def record_counter(self, name: str, value: Union[int, float] = 1, tags: Optional[Dict[str, str]] = None) -> None:
         """Record a counter metric (cumulative value)."""
@@ -461,6 +472,72 @@ class MetricsEmitter:
         
         logger.info(f"Cleared {cleared_count} metric values", extra={"cutoff_hours": older_than_hours})
         return cleared_count
+    
+    def start_auto_cleanup(self, cleanup_hours: float = 24.0, interval_seconds: int = 3600) -> None:
+        """Start automatic cleanup of old metrics.
+        
+        Args:
+            cleanup_hours: Remove metrics older than this many hours
+            interval_seconds: How often to run cleanup in seconds
+        """
+        if self._cleanup_thread and self._cleanup_thread.is_alive():
+            logger.warning("Auto cleanup already running")
+            return
+        
+        self.auto_cleanup_enabled = True
+        self.auto_cleanup_hours = cleanup_hours
+        self.auto_cleanup_interval = interval_seconds
+        self._cleanup_stop_event.clear()
+        
+        self._cleanup_thread = threading.Thread(
+            target=self._auto_cleanup_loop,
+            daemon=True,
+            name="MetricsCleanup"
+        )
+        self._cleanup_thread.start()
+        
+        logger.info(f"Started automatic metrics cleanup: {cleanup_hours}h retention, {interval_seconds}s interval")
+    
+    def stop_auto_cleanup(self) -> None:
+        """Stop automatic cleanup of metrics."""
+        if not self.auto_cleanup_enabled or not self._cleanup_thread:
+            return
+        
+        self.auto_cleanup_enabled = False
+        self._cleanup_stop_event.set()
+        
+        if self._cleanup_thread.is_alive():
+            self._cleanup_thread.join(timeout=5)
+            if self._cleanup_thread.is_alive():
+                logger.warning("Cleanup thread did not stop gracefully")
+        
+        logger.info("Stopped automatic metrics cleanup")
+    
+    def _auto_cleanup_loop(self) -> None:
+        """Main loop for automatic cleanup thread."""
+        while self.auto_cleanup_enabled and not self._cleanup_stop_event.is_set():
+            try:
+                self._cleanup_old_metrics(self.auto_cleanup_hours)
+            except Exception as e:
+                logger.error(f"Error during automatic metrics cleanup: {e}")
+            
+            # Wait for the interval or until stop is requested
+            self._cleanup_stop_event.wait(timeout=self.auto_cleanup_interval)
+    
+    def _cleanup_old_metrics(self, cleanup_hours: float) -> int:
+        """Internal method to clean up old metrics.
+        
+        Args:
+            cleanup_hours: Remove metrics older than this many hours
+            
+        Returns:
+            Number of metric values removed
+        """
+        try:
+            return self.clear_metrics(older_than_hours=cleanup_hours)
+        except Exception as e:
+            logger.error(f"Failed to cleanup old metrics: {e}")
+            return 0
 
 
 @dataclass
