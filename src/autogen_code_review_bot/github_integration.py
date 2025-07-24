@@ -8,13 +8,44 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 import requests
+import random
 
 from .logging_config import get_logger, log_operation_start, log_operation_end, ContextLogger
 from .monitoring import MetricsEmitter
+from .system_config import get_system_config
 
 API_URL = "https://api.github.com"
 logger = get_logger(__name__)
 metrics = MetricsEmitter()
+
+
+def _calculate_exponential_backoff(attempt: int, base_delay: float = 1.0, max_delay: float = 60.0, jitter: bool = True) -> float:
+    """Calculate exponential backoff delay with optional jitter.
+    
+    Args:
+        attempt: Current attempt number (0-indexed)
+        base_delay: Base delay in seconds
+        max_delay: Maximum delay in seconds
+        jitter: Whether to add random jitter to avoid thundering herd
+        
+    Returns:
+        Delay time in seconds
+    """
+    # Calculate exponential delay: base_delay * (2^attempt)
+    delay = base_delay * (2 ** attempt)
+    
+    # Cap at maximum delay
+    delay = min(delay, max_delay)
+    
+    # Add jitter to avoid thundering herd problems
+    if jitter:
+        # Add random jitter of ±25% of the delay
+        jitter_amount = delay * 0.25
+        delay += random.uniform(-jitter_amount, jitter_amount)
+        delay = max(0.1, delay)  # Ensure minimum delay
+    
+    return delay
+
 
 # Error classes for better error handling
 class GitHubError(Exception):
@@ -124,10 +155,14 @@ def _request_with_retries(
     token: str | None,
     data: Any | None = None,
     params: dict[str, Any] | None = None,
-    retries: int = 3,
+    retries: Optional[int] = None,
 ) -> requests.Response:
     """Return a ``requests`` response with enhanced error handling and retry logic."""
     global _circuit_breaker
+    
+    config = get_system_config()
+    if retries is None:
+        retries = config.default_retry_attempts
     
     # Check circuit breaker
     if not _circuit_breaker.should_allow_request():
@@ -162,7 +197,7 @@ def _request_with_retries(
                 headers=_headers(token_val),
                 data=data,
                 params=params,
-                timeout=15,  # Increased timeout
+                timeout=config.github_api_timeout,
             )
             
             # Check for specific HTTP status codes before raising
@@ -176,12 +211,14 @@ def _request_with_retries(
                                      tags={"error_type": "rate_limit", "api_operation": method.upper()})
                 
                 if attempt < retries - 1:
-                    # Calculate sleep time based on reset time or exponential backoff
+                    # Calculate sleep time based on reset time or sophisticated exponential backoff
                     if reset_timestamp:
-                        sleep_time = min(reset_timestamp - int(time.time()), 60)  # Max 1 minute
-                        sleep_time = max(sleep_time, 1)  # Min 1 second
+                        # For rate limits, respect the reset time but cap at reasonable values
+                        time_until_reset = reset_timestamp - int(time.time())
+                        sleep_time = min(max(time_until_reset, 1), 60)  # 1s min, 60s max
                     else:
-                        sleep_time = min(2 ** attempt * 2, 60)  # Exponential with cap
+                        # Use sophisticated exponential backoff for rate limits
+                        sleep_time = _calculate_exponential_backoff(attempt, base_delay=2.0, max_delay=60.0)
                     
                     logger.warning("Rate limit exceeded, waiting", 
                                  sleep_seconds=sleep_time,
@@ -214,7 +251,8 @@ def _request_with_retries(
                 # Server errors (retry with exponential backoff)
                 error_msg = f"GitHub API server error: {resp.status_code}"
                 if attempt < retries - 1:
-                    sleep_time = 2 ** attempt * 1.0  # Longer backoff for server errors
+                    # Use sophisticated exponential backoff for server errors
+                    sleep_time = _calculate_exponential_backoff(attempt, base_delay=1.0, max_delay=30.0)
                     logger.warning("GitHub API server error, retrying", 
                                  status_code=resp.status_code,
                                  sleep_seconds=sleep_time,
@@ -254,7 +292,8 @@ def _request_with_retries(
                                  tags={"error_type": "connection_error", "api_operation": method.upper()})
             
             if attempt < retries - 1:
-                sleep_time = 2 ** attempt * 0.5
+                # Use sophisticated exponential backoff for connection errors
+                sleep_time = _calculate_exponential_backoff(attempt, base_delay=0.5, max_delay=15.0)
                 logger.warning("GitHub API connection failed, retrying",
                              error=str(exc),
                              attempt=attempt + 1,
@@ -271,7 +310,8 @@ def _request_with_retries(
                                  tags={"error_type": "request_error", "api_operation": method.upper()})
             
             if attempt < retries - 1:
-                sleep_time = 2 ** attempt * 0.5
+                # Use sophisticated exponential backoff for general request errors
+                sleep_time = _calculate_exponential_backoff(attempt, base_delay=0.5, max_delay=15.0)
                 logger.warning("GitHub API request failed, retrying",
                              error=str(exc),
                              attempt=attempt + 1,
