@@ -8,6 +8,7 @@ from typing import Dict, Optional, Set
 from dataclasses import dataclass
 
 from .logging_config import get_logger
+from .system_config import get_system_config
 
 logger = get_logger(__name__)
 
@@ -39,15 +40,17 @@ class EventRecord:
 class WebhookDeduplicator:
     """Thread-safe webhook event deduplicator."""
     
-    def __init__(self, ttl_seconds: float = 3600, cleanup_interval: float = 300, storage_file: Optional[str] = None):
+    def __init__(self, ttl_seconds: Optional[float] = None, cleanup_interval: Optional[float] = None, storage_file: Optional[str] = None):
         """Initialize the deduplicator.
         
         Args:
-            ttl_seconds: Time to live for event records in seconds (default: 1 hour)
-            cleanup_interval: How often to run cleanup in seconds (default: 5 minutes)
+            ttl_seconds: Time to live for event records in seconds (uses system config if None)
+            cleanup_interval: How often to run cleanup in seconds (uses system config if None)
             storage_file: Optional file path for persistent storage
         """
-        self.ttl_seconds = ttl_seconds
+        config = get_system_config()
+        self.ttl_seconds = ttl_seconds if ttl_seconds is not None else config.webhook_deduplication_ttl
+        cleanup_interval = cleanup_interval if cleanup_interval is not None else config.cache_cleanup_interval
         self.cleanup_interval = cleanup_interval
         self.storage_file = storage_file
         self._events: Dict[str, EventRecord] = {}

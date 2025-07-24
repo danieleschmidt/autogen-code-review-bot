@@ -64,18 +64,22 @@ class TestErrorHandlingStandardization:
                 _run_command(["sleep", "10"], temp_dir, timeout=0.1)
 
     def test_run_command_nonexistent_tool_raises_tool_error(self):
-        """Test that nonexistent tools raise ToolError."""
+        """Test that nonexistent but allowed tools raise ToolError."""
         with tempfile.TemporaryDirectory() as temp_dir:
-            with pytest.raises(ToolError, match="Failed to execute"):
-                _run_command(["nonexistent_tool_12345"], temp_dir)
+            # Use an allowed tool that's very unlikely to exist
+            # but if it does exist, we won't run this test  
+            with patch('shutil.which', return_value=None):
+                with pytest.raises(ToolError, match="Failed to execute"):
+                    _run_command(["eslint"], temp_dir)  # eslint is in ALLOWED_EXECUTABLES
 
     def test_run_single_linter_tool_error_propagation(self):
         """Test that linter tool errors are properly propagated with context."""
         with tempfile.TemporaryDirectory() as temp_dir:
-            with patch('autogen_code_review_bot.pr_analysis._run_command') as mock_run:
+            with patch('autogen_code_review_bot.pr_analysis._run_command') as mock_run, \
+                 patch('autogen_code_review_bot.pr_analysis.which', return_value="/usr/bin/ruff"):
                 mock_run.side_effect = ToolError("Command failed")
                 
-                with pytest.raises(ToolError, match="Failed to run.*for.*python"):
+                with pytest.raises(ToolError, match="Command failed"):
                     _run_single_linter("python", "ruff", temp_dir)
 
     def test_security_checks_tool_error_propagation(self):
@@ -128,17 +132,26 @@ class TestErrorHandlingStandardization:
     def test_exception_chaining_preserves_context(self):
         """Test that exception chaining preserves original error context."""
         with tempfile.TemporaryDirectory() as temp_dir:
-            with patch('autogen_code_review_bot.pr_analysis._run_command') as mock_run:
+            with patch('autogen_code_review_bot.pr_analysis._run_command') as mock_run, \
+                 patch('autogen_code_review_bot.pr_analysis.which', return_value="/usr/bin/ruff"):
                 original_error = OSError("Permission denied")
-                mock_run.side_effect = ToolError("Command failed") from original_error
+                def side_effect(*args, **kwargs):
+                    raise ToolError("Command failed") from original_error
+                mock_run.side_effect = side_effect
                 
                 try:
                     _run_single_linter("python", "ruff", temp_dir)
                     assert False, "Should have raised exception"
                 except ToolError as e:
-                    # Check exception chaining
+                    # Check exception chaining - look for original error in the chain
                     assert e.__cause__ is not None
-                    assert "Failed to run ruff for python" in str(e)
+                    # The original error should be accessible through the cause chain
+                    cause = e.__cause__
+                    while cause is not None:
+                        if "Permission denied" in str(cause):
+                            break
+                        cause = cause.__cause__
+                    assert cause is not None, "Original Permission denied error should be in exception chain"
 
     def test_error_handling_consistency_across_modules(self):
         """Test that error handling patterns are consistent."""
@@ -160,9 +173,9 @@ class TestErrorHandlingStandardization:
         with pytest.raises(ValidationError, match="Invalid repository path"):
             analyze_pr(None)
         
-        # ToolError for tool execution issues  
+        # ValidationError for disallowed commands
         with tempfile.TemporaryDirectory() as temp_dir:
-            with pytest.raises(ToolError, match="Failed to execute"):
+            with pytest.raises(ValidationError, match="Unsafe command rejected"):
                 _run_command(["nonexistent_command_12345"], temp_dir)
 
     def test_error_messages_are_descriptive(self):

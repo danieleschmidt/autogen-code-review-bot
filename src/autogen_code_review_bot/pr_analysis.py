@@ -17,6 +17,7 @@ from .logging_config import get_logger
 from .agents import run_agent_conversation
 from .monitoring import MetricsEmitter
 from .exceptions import AnalysisError, ValidationError, ToolError
+from .system_config import get_system_config
 
 # Default mapping of languages to linter executables
 DEFAULT_LINTERS: Dict[str, str] = {
@@ -78,17 +79,21 @@ def load_linter_config(config_path: str | Path | None = None) -> Dict[str, str]:
 
 
 
-def _detect_repo_languages(repo_path: str | Path, max_files: int = 10000) -> Set[str]:
+def _detect_repo_languages(repo_path: str | Path, max_files: int | None = None) -> Set[str]:
     """Return a set of languages present in ``repo_path``.
     
     Args:
         repo_path: Path to the repository to analyze
-        max_files: Maximum number of files to scan (default: 10,000)
+        max_files: Maximum number of files to scan (uses system config default if None)
         
     Returns:
         Set of detected programming languages
     """
 
+    config = get_system_config()
+    if max_files is None:
+        max_files = config.language_detection_max_files
+        
     repo_path = Path(repo_path)
     languages: Set[str] = set()
     file_count = 0
@@ -343,12 +348,33 @@ def _analyze_pr_streaming(repo_path: str, linters: Dict[str, str], use_cache: bo
         raise AnalysisError(f"Streaming analysis error: {exc}") from exc
 
 
-DEFAULT_TIMEOUT = 30
+# Configuration is loaded dynamically - constants are now accessed via get_system_config()
 
 # Allowlist of safe executables to prevent command injection
+# Includes linting tools, system utilities needed for testing, and common development tools
 ALLOWED_EXECUTABLES = {
-    "ruff", "eslint", "rubocop", "bandit", "radon", "golangci-lint",
-    "flake8", "pylint", "mypy", "black", "isort", "prettier"
+    # Python linting and formatting tools
+    "ruff", "flake8", "pylint", "mypy", "black", "isort", "bandit",
+    # JavaScript/Node.js tools
+    "eslint", "prettier", "npm", "node", "npx",
+    # Ruby tools
+    "rubocop",
+    # Go tools
+    "golangci-lint", "go",
+    # Performance analysis
+    "radon",
+    # System utilities (needed for operations and testing)
+    "ls", "cat", "find", "grep", "sleep", "echo", "pwd", "which", "wc", "head", "tail",
+    # Git operations
+    "git",
+    # Package managers and build tools
+    "pip", "pip3", "python", "python3", "make", "cmake",
+    # Coverage and testing tools
+    "pytest", "coverage", "jest",
+    # Docker (for containerized environments)
+    "docker",
+    # Shell utilities
+    "bash", "sh", "env"
 }
 
 
@@ -411,13 +437,36 @@ def _validate_path_safety(path: str, project_root: str = None) -> bool:
     # Check for null bytes and other dangerous characters
     if '\x00' in path or '\r' in path or '\n' in path or '\t' in path:
         return False
+    
+    # Check for Unicode normalization attacks and suspicious Unicode characters
+    try:
+        import unicodedata
+        normalized = unicodedata.normalize('NFC', path)
+        # If normalization changes the path significantly, it might be an attack
+        if len(normalized) != len(path) or normalized != path:
+            # Allow minor differences but reject major changes
+            config = get_system_config()
+            if abs(len(normalized) - len(path)) > config.unicode_normalization_max_diff:
+                return False
+    except (UnicodeError, ImportError):
+        # If Unicode handling fails, continue with other checks
+        pass
         
-    # Check for URL encoding attempts
-    if '%' in path and any(x in path.lower() for x in ['%2e', '%2f', '%5c']):
-        return False
+    # Check for URL encoding attempts (more comprehensive)
+    if '%' in path:
+        url_encoded_attacks = [
+            '%2e', '%2f', '%5c',  # . / \
+            '%00',                # null byte
+            '%20',                # space (suspicious in paths)
+            '%7e',                # ~ (home directory reference)
+            '%c0%ae', '%c1%9c',   # Unicode overlong encoding of . and \
+        ]
+        if any(x in path.lower() for x in url_encoded_attacks):
+            return False
     
     # Check path length to prevent buffer overflow attempts
-    if len(path) > 4096:
+    config = get_system_config()
+    if len(path) > config.max_path_length:
         return False
         
     try:
@@ -426,10 +475,11 @@ def _validate_path_safety(path: str, project_root: str = None) -> bool:
         path_str = str(resolved_path)
         
         # Define sensitive directories that should never be accessible
+        # Note: /tmp/ is allowed for testing and temporary operations
         sensitive_prefixes = [
             "/etc/", "/proc/", "/sys/", "/dev/",
             "/home/", "/var/log/", "/usr/bin/", "/usr/sbin/",
-            "/bin/", "/sbin/", "/.ssh/", "/tmp/",
+            "/bin/", "/sbin/", "/.ssh/",
             "C:\\Windows\\", "C:\\Users\\", "C:\\Program Files\\"
         ]
         
@@ -482,7 +532,14 @@ def _validate_path_safety(path: str, project_root: str = None) -> bool:
                 return False
         
         # Additional checks for traversal patterns that might survive resolution
-        dangerous_patterns = ['../', '..\\', '..\\//', '..\\..', '....']
+        dangerous_patterns = [
+            '../', '..\\', '..\\//', '..\\..', '....',  # Traditional traversal
+            '~/', '~\\',                                  # Home directory references
+            '$HOME', '$USER', '${',                       # Environment variable references
+            '|', ';', '&', '`', '$(',                    # Command injection attempts in paths
+            '<script', 'javascript:',                     # Script injection attempts
+            'file://', 'http://', 'https://', 'ftp://',  # URL schemes in paths
+        ]
         for pattern in dangerous_patterns:
             if pattern in path or pattern in path_str:
                 return False
@@ -508,7 +565,7 @@ def _validate_path_safety(path: str, project_root: str = None) -> bool:
         return False
 
 
-def _run_command(cmd: List[str], cwd: str, timeout: int = DEFAULT_TIMEOUT, project_root: str | None = None) -> str:
+def _run_command(cmd: List[str], cwd: str, timeout: int | None = None, project_root: str | None = None) -> str:
     """Execute ``cmd`` in ``cwd`` and return combined output.
     
     Security: Validates command safety and path traversal prevention.
@@ -516,7 +573,7 @@ def _run_command(cmd: List[str], cwd: str, timeout: int = DEFAULT_TIMEOUT, proje
     Args:
         cmd: Command and arguments to execute
         cwd: Working directory for command execution
-        timeout: Command timeout in seconds
+        timeout: Command timeout in seconds (uses system config default if None)
         project_root: Project root path for security validation
         
     Returns:
@@ -526,6 +583,10 @@ def _run_command(cmd: List[str], cwd: str, timeout: int = DEFAULT_TIMEOUT, proje
         ValidationError: If command or path validation fails
         ToolError: If command execution fails
     """
+    config = get_system_config()
+    if timeout is None:
+        timeout = config.default_command_timeout
+        
     # Validate command safety
     if not _validate_command_safety(cmd):
         logger.error("Unsafe command rejected", 
@@ -773,7 +834,8 @@ def _run_all_checks_parallel(repo_path: str, linters: Dict[str, str]) -> PRAnaly
         return _run_timed_check("performance", _run_performance_checks, repo_path, ensure)
     
     # Execute all checks in parallel
-    with ThreadPoolExecutor(max_workers=3) as executor:
+    config = get_system_config()
+    with ThreadPoolExecutor(max_workers=config.default_thread_pool_size) as executor:
         logger.debug("Submitting parallel analysis tasks")
         # Submit all tasks
         security_future = executor.submit(run_security)

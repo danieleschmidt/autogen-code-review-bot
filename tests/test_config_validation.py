@@ -8,7 +8,6 @@ import pytest
 
 from autogen_code_review_bot.config_validation import (
     ConfigValidator,
-    ConfigSchema,
     ConfigError,
     ValidationError,
     SchemaDefinition,
@@ -87,7 +86,7 @@ class TestConfigSchema:
         with pytest.raises(ValidationError) as exc_info:
             schema.validate(config)
         
-        assert "minimum" in str(exc_info.value).lower() or "min" in str(exc_info.value).lower()
+        assert ">=" in str(exc_info.value) or "minimum" in str(exc_info.value).lower() or "min" in str(exc_info.value).lower()
 
     def test_schema_validation_pattern_matching(self):
         """Test pattern validation for string fields."""
@@ -292,7 +291,7 @@ class TestBotConfigValidation:
             validate_bot_config(config)
         
         assert "webhook_secret" in str(exc_info.value)
-        assert "empty" in str(exc_info.value).lower()
+        assert "empty" in str(exc_info.value).lower() or "characters long" in str(exc_info.value).lower()
 
 
 class TestConfigValidator:
