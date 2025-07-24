@@ -11,6 +11,7 @@ from typing import Dict, List, Optional, Tuple, Any
 import yaml
 
 from .logging_config import get_logger
+from .system_config import get_system_config
 
 logger = get_logger(__name__)
 
@@ -234,7 +235,7 @@ class CoverageReporter:
                 cwd=repo_path,
                 capture_output=True,
                 text=True,
-                timeout=300  # 5 minute timeout
+                timeout=get_system_config().coverage_timeout
             )
             
             if result.returncode != 0:
