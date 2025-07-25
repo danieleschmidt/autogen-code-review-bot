@@ -59,6 +59,7 @@ class SystemConfig:
     circuit_breaker_timeout: int = 300     # 5 minutes
     
     # GitHub API settings
+    github_api_url: str = "https://api.github.com"
     github_api_timeout: int = 15
     github_api_rate_limit_buffer: int = 10  # requests to keep in reserve
     
@@ -96,6 +97,7 @@ class SystemConfig:
             'AUTOGEN_MAX_FILES': ('max_files_normal_mode', int),
             'AUTOGEN_COVERAGE_THRESHOLD': ('coverage_default_threshold', float),
             'AUTOGEN_WEBHOOK_TTL': ('webhook_deduplication_ttl', int),
+            'AUTOGEN_GITHUB_API_URL': ('github_api_url', str),
             'AUTOGEN_GITHUB_TIMEOUT': ('github_api_timeout', int),
             'AUTOGEN_RETRY_ATTEMPTS': ('default_retry_attempts', int),
         }

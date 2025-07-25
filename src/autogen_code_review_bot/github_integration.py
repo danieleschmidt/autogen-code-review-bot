@@ -13,8 +13,6 @@ import random
 from .logging_config import get_logger, log_operation_start, log_operation_end, ContextLogger
 from .monitoring import MetricsEmitter
 from .system_config import get_system_config
-
-API_URL = "https://api.github.com"
 logger = get_logger(__name__)
 metrics = MetricsEmitter()
 
@@ -342,7 +340,8 @@ def get_pull_request_diff(repo: str, pr_number: int, token: str | None = None) -
                repository=repo, 
                pr_number=pr_number)
     
-    url = f"{API_URL}/repos/{repo}/pulls/{pr_number}"
+    config = get_system_config()
+    url = f"{config.github_api_url}/repos/{repo}/pulls/{pr_number}"
     resp = _request_with_retries(
         "get",
         url,
@@ -367,7 +366,8 @@ def post_comment(
                pr_number=pr_number,
                comment_length=len(body))
 
-    url = f"{API_URL}/repos/{repo}/issues/{pr_number}/comments"
+    config = get_system_config()
+    url = f"{config.github_api_url}/repos/{repo}/issues/{pr_number}/comments"
     
     try:
         resp = _request_with_retries(
