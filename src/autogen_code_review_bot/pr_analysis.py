@@ -80,7 +80,7 @@ def load_linter_config(config_path: str | Path | None = None) -> Dict[str, str]:
 
 
 def _detect_repo_languages(repo_path: str | Path, max_files: int | None = None) -> Set[str]:
-    """Return a set of languages present in ``repo_path``.
+    """Return a set of languages present in ``repo_path`` with optimized scanning.
     
     Args:
         repo_path: Path to the repository to analyze
@@ -98,9 +98,32 @@ def _detect_repo_languages(repo_path: str | Path, max_files: int | None = None) 
     languages: Set[str] = set()
     file_count = 0
     
-    for root, _, files in os.walk(repo_path):
-        for name in files:
-            # Early exit condition to prevent excessive memory usage
+    # Cache for language detection to avoid repeated calls for same extensions
+    extension_cache: dict[str, str] = {}
+    
+    # Common directories to skip for performance
+    skip_dirs = {'.git', '__pycache__', '.pytest_cache', 'node_modules', 
+                '.venv', 'venv', '.env', 'env', '.tox', 'build', 'dist',
+                '.mypy_cache', '.coverage', 'htmlcov', '.idea', '.vscode'}
+    
+    # Use rglob for better performance with pattern matching
+    try:
+        # Use itertools.islice for better memory efficiency
+        from itertools import islice
+        
+        # Get all files but limit early for memory efficiency
+        all_files = repo_path.rglob('*')
+        
+        for file_path in islice(all_files, max_files * 2):  # Scan more but process fewer
+            # Skip directories and files in skip_dirs
+            if file_path.is_dir():
+                continue
+                
+            # Check if any parent directory should be skipped
+            if any(part in skip_dirs for part in file_path.parts):
+                continue
+                
+            # Early termination when file limit reached
             if file_count >= max_files:
                 logger.warning(
                     f"Language detection stopped - reached file limit of {max_files}",
@@ -113,23 +136,58 @@ def _detect_repo_languages(repo_path: str | Path, max_files: int | None = None) 
                 )
                 break
                 
-            file_path = Path(root) / name
-            lang = detect_language(file_path)
+            # Use extension caching for performance
+            extension = file_path.suffix.lower()
+            if extension in extension_cache:
+                lang = extension_cache[extension]
+            else:
+                lang = detect_language(file_path)
+                extension_cache[extension] = lang
+                
             if lang != "unknown":
                 languages.add(lang)
+                
             file_count += 1
-        else:
-            # Continue outer loop if inner loop wasn't broken
-            continue
-        # Break outer loop if inner loop was broken
-        break
+            
+            # Early termination if we've found many languages (likely covers the repo)
+            if len(languages) >= 10 and file_count >= 100:
+                logger.debug("Early termination - found sufficient language diversity",
+                           extra={"languages_count": len(languages), "files_scanned": file_count})
+                break
+                
+    except (OSError, PermissionError) as e:
+        logger.warning(f"Error during language detection: {e}", extra={"repo_path": str(repo_path)})
+        # Fallback to basic os.walk if rglob fails
+        for root, dirs, files in os.walk(repo_path):
+            # Skip directories in place to avoid traversing
+            dirs[:] = [d for d in dirs if d not in skip_dirs]
+            
+            for name in files:
+                if file_count >= max_files:
+                    break
+                    
+                file_path = Path(root) / name
+                extension = file_path.suffix.lower()
+                if extension in extension_cache:
+                    lang = extension_cache[extension]
+                else:
+                    lang = detect_language(file_path)
+                    extension_cache[extension] = lang
+                    
+                if lang != "unknown":
+                    languages.add(lang)
+                file_count += 1
+            
+            if file_count >= max_files:
+                break
     
     logger.debug("Language detection completed", 
                 extra={
                     "languages": list(languages), 
                     "files_scanned": file_count,
                     "repo_path": str(repo_path),
-                    "limit_reached": file_count >= max_files
+                    "limit_reached": file_count >= max_files,
+                    "cache_hits": len(extension_cache)
                 })
     return languages
 
