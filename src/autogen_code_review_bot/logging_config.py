@@ -21,11 +21,20 @@ class StructuredFormatter(logging.Formatter):
     
     def format(self, record: logging.LogRecord) -> str:
         """Format log record as structured JSON."""
+        # Mask sensitive data in log message
+        message = record.getMessage()
+        try:
+            from .token_security import TokenMasker
+            message = TokenMasker.mask_sensitive_data(message)
+        except ImportError:
+            # Fallback if token_security module is not available
+            pass
+            
         log_entry = {
             "timestamp": time.time(),
             "level": record.levelname.lower(),
             "logger": record.name,
-            "message": record.getMessage(),
+            "message": message,
             "service": self.service_name,
         }
         
@@ -34,11 +43,17 @@ class StructuredFormatter(logging.Formatter):
         if req_id:
             log_entry["request_id"] = req_id
         
-        # Add exception info if present
+        # Add exception info if present with token masking
         if record.exc_info:
-            log_entry["exception"] = self.formatException(record.exc_info)
+            exception_text = self.formatException(record.exc_info)
+            try:
+                from .token_security import TokenMasker
+                exception_text = TokenMasker.mask_sensitive_data(exception_text)
+            except ImportError:
+                pass
+            log_entry["exception"] = exception_text
         
-        # Add any extra fields
+        # Add any extra fields with token masking
         extra_fields = {
             k: v for k, v in record.__dict__.items() 
             if k not in ('name', 'msg', 'args', 'levelname', 'levelno', 'pathname', 
@@ -47,6 +62,15 @@ class StructuredFormatter(logging.Formatter):
                         'processName', 'process', 'getMessage', 'exc_info', 'exc_text',
                         'stack_info', 'message')
         }
+        
+        # Mask sensitive data in extra fields
+        try:
+            from .token_security import TokenMasker
+            extra_fields = TokenMasker.mask_dict(extra_fields)
+        except ImportError:
+            # Fallback if token_security module is not available
+            pass
+            
         log_entry.update(extra_fields)
         
         return json.dumps(log_entry, default=str)
