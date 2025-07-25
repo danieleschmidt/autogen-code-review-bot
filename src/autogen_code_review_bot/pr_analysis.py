@@ -18,6 +18,7 @@ from .agents import run_agent_conversation
 from .monitoring import MetricsEmitter
 from .exceptions import AnalysisError, ValidationError, ToolError
 from .system_config import get_system_config
+from .subprocess_security import SubprocessValidator, safe_subprocess_run
 
 # Default mapping of languages to linter executables
 DEFAULT_LINTERS: Dict[str, str] = {
@@ -624,9 +625,10 @@ def _validate_path_safety(path: str, project_root: str = None) -> bool:
 
 
 def _run_command(cmd: List[str], cwd: str, timeout: int | None = None, project_root: str | None = None) -> str:
-    """Execute ``cmd`` in ``cwd`` and return combined output.
+    """Execute ``cmd`` in ``cwd`` and return combined output with enhanced security.
     
-    Security: Validates command safety and path traversal prevention.
+    Security: Uses comprehensive validation including argument sanitization,
+    command allowlisting, and path traversal prevention.
     
     Args:
         cmd: Command and arguments to execute
@@ -644,58 +646,52 @@ def _run_command(cmd: List[str], cwd: str, timeout: int | None = None, project_r
     config = get_system_config()
     if timeout is None:
         timeout = config.default_command_timeout
-        
-    # Validate command safety
-    if not _validate_command_safety(cmd):
-        logger.error("Unsafe command rejected", 
-                    extra={"command": cmd[0] if cmd else 'empty', "full_cmd": cmd})
-        raise ValidationError(f"Unsafe command rejected: {cmd[0] if cmd else 'empty'}")
-        
-    # Validate working directory path
-    if not _validate_path_safety(cwd, project_root):
-        logger.error("Unsafe working directory path rejected", 
-                    extra={"cwd": cwd, "project_root": project_root})
-        raise ValidationError(f"Unsafe working directory path rejected: {cwd}")
-        
-    # Ensure working directory exists
-    if not Path(cwd).is_dir():
-        logger.error("Working directory does not exist", extra={"cwd": cwd})
-        raise ValidationError(f"Working directory does not exist: {cwd}")
-
+    
     try:
-        completed = run(  # nosec B603 - command is validated against allowlist
-            cmd,
-            capture_output=True,
-            text=True,
-            check=True,
+        # Use enhanced subprocess validation
+        result = safe_subprocess_run(
+            cmd=cmd,
             cwd=cwd,
             timeout=timeout,
-            shell=False,  # Explicitly disable shell to prevent injection
+            project_root=project_root,
+            check=False  # Handle non-zero exit codes manually
         )
-        logger.debug("Command executed successfully", 
-                    extra={"command": cmd[0], "cwd": cwd, "output_length": len(completed.stdout)})
-        return completed.stdout.strip()
-    except TimeoutExpired as exc:
-        logger.error("Command timed out", 
-                    extra={"command": cmd[0], "timeout": timeout, "cwd": cwd})
-        raise ToolError(f"Command '{cmd[0]}' timed out after {timeout}s") from exc
-    except CalledProcessError as exc:  # pragma: no cover - runtime feedback
-        output = exc.stdout or ""
-        err = exc.stderr or ""
+        
+        # Combine stdout and stderr for linter output
+        output = result.stdout or ""
+        err = result.stderr or ""
         combined_output = (output + "\n" + err).strip()
-        logger.warning("Command returned non-zero exit code", 
-                      extra={
-                          "command": cmd[0], 
-                          "exit_code": exc.returncode,
-                          "cwd": cwd,
-                          "output_length": len(combined_output)
-                      })
+        
+        if result.returncode == 0:
+            logger.debug("Command executed successfully", 
+                        extra={
+                            "command": cmd[0], 
+                            "cwd": cwd, 
+                            "output_length": len(combined_output),
+                            "return_code": result.returncode
+                        })
+        else:
+            logger.warning("Command returned non-zero exit code", 
+                          extra={
+                              "command": cmd[0], 
+                              "exit_code": result.returncode,
+                              "cwd": cwd,
+                              "output_length": len(combined_output)
+                          })
+        
         # For linter tools, non-zero exit often means issues found, not failure
         return combined_output
-    except (OSError, FileNotFoundError) as exc:
-        logger.error("Command execution failed", 
+        
+    except ValidationError:
+        # Re-raise validation errors as-is
+        raise
+    except ToolError:
+        # Re-raise tool errors as-is
+        raise
+    except Exception as exc:
+        logger.error("Unexpected error in command execution", 
                     extra={"command": cmd[0], "cwd": cwd, "error": str(exc)})
-        raise ToolError(f"Failed to execute '{cmd[0]}': {exc}") from exc
+        raise ToolError(f"Unexpected error executing '{cmd[0]}': {exc}") from exc
 
 
 def _run_single_linter(lang: str, tool: str, repo_path: str) -> tuple[str, str]:
