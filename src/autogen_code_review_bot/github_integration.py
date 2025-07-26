@@ -13,8 +13,7 @@ import random
 from .logging_config import get_logger, log_operation_start, log_operation_end, ContextLogger
 from .monitoring import MetricsEmitter
 from .system_config import get_system_config
-
-API_URL = "https://api.github.com"
+from .token_security import TokenMasker, mask_token_in_url, safe_exception_str
 logger = get_logger(__name__)
 metrics = MetricsEmitter()
 
@@ -177,7 +176,7 @@ def _request_with_retries(
         logger,
         "github_api_request",
         method=method.upper(),
-        url=url.replace(token_val, "***") if token_val in url else url,
+        url=mask_token_in_url(url, token_val),
         retries=retries
     )
     
@@ -287,7 +286,7 @@ def _request_with_retries(
             
         except (requests.ConnectionError, requests.Timeout) as exc:
             # Network-level errors
-            last_error = GitHubConnectionError(str(exc), original_error=exc)
+            last_error = GitHubConnectionError(safe_exception_str(exc), original_error=exc)
             metrics.record_counter("github_api_errors_total", 1, 
                                  tags={"error_type": "connection_error", "api_operation": method.upper()})
             
@@ -295,7 +294,7 @@ def _request_with_retries(
                 # Use sophisticated exponential backoff for connection errors
                 sleep_time = _calculate_exponential_backoff(attempt, base_delay=0.5, max_delay=15.0)
                 logger.warning("GitHub API connection failed, retrying",
-                             error=str(exc),
+                             error=safe_exception_str(exc),
                              attempt=attempt + 1,
                              sleep_seconds=sleep_time)
                 metrics.record_counter("github_api_retries_total", 1, 
@@ -305,7 +304,7 @@ def _request_with_retries(
             
         except requests.RequestException as exc:
             # Other request exceptions
-            last_error = GitHubError(f"GitHub API request failed: {exc}")
+            last_error = GitHubError(f"GitHub API request failed: {safe_exception_str(exc)}")
             metrics.record_counter("github_api_errors_total", 1, 
                                  tags={"error_type": "request_error", "api_operation": method.upper()})
             
@@ -313,7 +312,7 @@ def _request_with_retries(
                 # Use sophisticated exponential backoff for general request errors
                 sleep_time = _calculate_exponential_backoff(attempt, base_delay=0.5, max_delay=15.0)
                 logger.warning("GitHub API request failed, retrying",
-                             error=str(exc),
+                             error=safe_exception_str(exc),
                              attempt=attempt + 1,
                              sleep_seconds=sleep_time)
                 metrics.record_counter("github_api_retries_total", 1, 
@@ -324,7 +323,7 @@ def _request_with_retries(
     # If we've exhausted all retries, record circuit breaker failure and raise
     _circuit_breaker.record_failure()
     log_operation_end(logger, request_context, success=False, 
-                    error=str(last_error), total_attempts=retries)
+                    error=safe_exception_str(last_error) if last_error else "Unknown error", total_attempts=retries)
     
     if last_error:
         raise last_error
@@ -342,7 +341,8 @@ def get_pull_request_diff(repo: str, pr_number: int, token: str | None = None) -
                repository=repo, 
                pr_number=pr_number)
     
-    url = f"{API_URL}/repos/{repo}/pulls/{pr_number}"
+    config = get_system_config()
+    url = f"{config.github_api_url}/repos/{repo}/pulls/{pr_number}"
     resp = _request_with_retries(
         "get",
         url,
@@ -367,7 +367,8 @@ def post_comment(
                pr_number=pr_number,
                comment_length=len(body))
 
-    url = f"{API_URL}/repos/{repo}/issues/{pr_number}/comments"
+    config = get_system_config()
+    url = f"{config.github_api_url}/repos/{repo}/issues/{pr_number}/comments"
     
     try:
         resp = _request_with_retries(

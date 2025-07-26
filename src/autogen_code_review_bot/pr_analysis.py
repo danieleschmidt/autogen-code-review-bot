@@ -18,6 +18,7 @@ from .agents import run_agent_conversation
 from .monitoring import MetricsEmitter
 from .exceptions import AnalysisError, ValidationError, ToolError
 from .system_config import get_system_config
+from .subprocess_security import SubprocessValidator, safe_subprocess_run
 
 # Default mapping of languages to linter executables
 DEFAULT_LINTERS: Dict[str, str] = {
@@ -80,7 +81,7 @@ def load_linter_config(config_path: str | Path | None = None) -> Dict[str, str]:
 
 
 def _detect_repo_languages(repo_path: str | Path, max_files: int | None = None) -> Set[str]:
-    """Return a set of languages present in ``repo_path``.
+    """Return a set of languages present in ``repo_path`` with optimized scanning.
     
     Args:
         repo_path: Path to the repository to analyze
@@ -98,9 +99,32 @@ def _detect_repo_languages(repo_path: str | Path, max_files: int | None = None) 
     languages: Set[str] = set()
     file_count = 0
     
-    for root, _, files in os.walk(repo_path):
-        for name in files:
-            # Early exit condition to prevent excessive memory usage
+    # Cache for language detection to avoid repeated calls for same extensions
+    extension_cache: dict[str, str] = {}
+    
+    # Common directories to skip for performance
+    skip_dirs = {'.git', '__pycache__', '.pytest_cache', 'node_modules', 
+                '.venv', 'venv', '.env', 'env', '.tox', 'build', 'dist',
+                '.mypy_cache', '.coverage', 'htmlcov', '.idea', '.vscode'}
+    
+    # Use rglob for better performance with pattern matching
+    try:
+        # Use itertools.islice for better memory efficiency
+        from itertools import islice
+        
+        # Get all files but limit early for memory efficiency
+        all_files = repo_path.rglob('*')
+        
+        for file_path in islice(all_files, max_files * 2):  # Scan more but process fewer
+            # Skip directories and files in skip_dirs
+            if file_path.is_dir():
+                continue
+                
+            # Check if any parent directory should be skipped
+            if any(part in skip_dirs for part in file_path.parts):
+                continue
+                
+            # Early termination when file limit reached
             if file_count >= max_files:
                 logger.warning(
                     f"Language detection stopped - reached file limit of {max_files}",
@@ -113,23 +137,58 @@ def _detect_repo_languages(repo_path: str | Path, max_files: int | None = None) 
                 )
                 break
                 
-            file_path = Path(root) / name
-            lang = detect_language(file_path)
+            # Use extension caching for performance
+            extension = file_path.suffix.lower()
+            if extension in extension_cache:
+                lang = extension_cache[extension]
+            else:
+                lang = detect_language(file_path)
+                extension_cache[extension] = lang
+                
             if lang != "unknown":
                 languages.add(lang)
+                
             file_count += 1
-        else:
-            # Continue outer loop if inner loop wasn't broken
-            continue
-        # Break outer loop if inner loop was broken
-        break
+            
+            # Early termination if we've found many languages (likely covers the repo)
+            if len(languages) >= 10 and file_count >= 100:
+                logger.debug("Early termination - found sufficient language diversity",
+                           extra={"languages_count": len(languages), "files_scanned": file_count})
+                break
+                
+    except (OSError, PermissionError) as e:
+        logger.warning(f"Error during language detection: {e}", extra={"repo_path": str(repo_path)})
+        # Fallback to basic os.walk if rglob fails
+        for root, dirs, files in os.walk(repo_path):
+            # Skip directories in place to avoid traversing
+            dirs[:] = [d for d in dirs if d not in skip_dirs]
+            
+            for name in files:
+                if file_count >= max_files:
+                    break
+                    
+                file_path = Path(root) / name
+                extension = file_path.suffix.lower()
+                if extension in extension_cache:
+                    lang = extension_cache[extension]
+                else:
+                    lang = detect_language(file_path)
+                    extension_cache[extension] = lang
+                    
+                if lang != "unknown":
+                    languages.add(lang)
+                file_count += 1
+            
+            if file_count >= max_files:
+                break
     
     logger.debug("Language detection completed", 
                 extra={
                     "languages": list(languages), 
                     "files_scanned": file_count,
                     "repo_path": str(repo_path),
-                    "limit_reached": file_count >= max_files
+                    "limit_reached": file_count >= max_files,
+                    "cache_hits": len(extension_cache)
                 })
     return languages
 
@@ -566,9 +625,10 @@ def _validate_path_safety(path: str, project_root: str = None) -> bool:
 
 
 def _run_command(cmd: List[str], cwd: str, timeout: int | None = None, project_root: str | None = None) -> str:
-    """Execute ``cmd`` in ``cwd`` and return combined output.
+    """Execute ``cmd`` in ``cwd`` and return combined output with enhanced security.
     
-    Security: Validates command safety and path traversal prevention.
+    Security: Uses comprehensive validation including argument sanitization,
+    command allowlisting, and path traversal prevention.
     
     Args:
         cmd: Command and arguments to execute
@@ -586,58 +646,52 @@ def _run_command(cmd: List[str], cwd: str, timeout: int | None = None, project_r
     config = get_system_config()
     if timeout is None:
         timeout = config.default_command_timeout
-        
-    # Validate command safety
-    if not _validate_command_safety(cmd):
-        logger.error("Unsafe command rejected", 
-                    extra={"command": cmd[0] if cmd else 'empty', "full_cmd": cmd})
-        raise ValidationError(f"Unsafe command rejected: {cmd[0] if cmd else 'empty'}")
-        
-    # Validate working directory path
-    if not _validate_path_safety(cwd, project_root):
-        logger.error("Unsafe working directory path rejected", 
-                    extra={"cwd": cwd, "project_root": project_root})
-        raise ValidationError(f"Unsafe working directory path rejected: {cwd}")
-        
-    # Ensure working directory exists
-    if not Path(cwd).is_dir():
-        logger.error("Working directory does not exist", extra={"cwd": cwd})
-        raise ValidationError(f"Working directory does not exist: {cwd}")
-
+    
     try:
-        completed = run(  # nosec B603 - command is validated against allowlist
-            cmd,
-            capture_output=True,
-            text=True,
-            check=True,
+        # Use enhanced subprocess validation
+        result = safe_subprocess_run(
+            cmd=cmd,
             cwd=cwd,
             timeout=timeout,
-            shell=False,  # Explicitly disable shell to prevent injection
+            project_root=project_root,
+            check=False  # Handle non-zero exit codes manually
         )
-        logger.debug("Command executed successfully", 
-                    extra={"command": cmd[0], "cwd": cwd, "output_length": len(completed.stdout)})
-        return completed.stdout.strip()
-    except TimeoutExpired as exc:
-        logger.error("Command timed out", 
-                    extra={"command": cmd[0], "timeout": timeout, "cwd": cwd})
-        raise ToolError(f"Command '{cmd[0]}' timed out after {timeout}s") from exc
-    except CalledProcessError as exc:  # pragma: no cover - runtime feedback
-        output = exc.stdout or ""
-        err = exc.stderr or ""
+        
+        # Combine stdout and stderr for linter output
+        output = result.stdout or ""
+        err = result.stderr or ""
         combined_output = (output + "\n" + err).strip()
-        logger.warning("Command returned non-zero exit code", 
-                      extra={
-                          "command": cmd[0], 
-                          "exit_code": exc.returncode,
-                          "cwd": cwd,
-                          "output_length": len(combined_output)
-                      })
+        
+        if result.returncode == 0:
+            logger.debug("Command executed successfully", 
+                        extra={
+                            "command": cmd[0], 
+                            "cwd": cwd, 
+                            "output_length": len(combined_output),
+                            "return_code": result.returncode
+                        })
+        else:
+            logger.warning("Command returned non-zero exit code", 
+                          extra={
+                              "command": cmd[0], 
+                              "exit_code": result.returncode,
+                              "cwd": cwd,
+                              "output_length": len(combined_output)
+                          })
+        
         # For linter tools, non-zero exit often means issues found, not failure
         return combined_output
-    except (OSError, FileNotFoundError) as exc:
-        logger.error("Command execution failed", 
+        
+    except ValidationError:
+        # Re-raise validation errors as-is
+        raise
+    except ToolError:
+        # Re-raise tool errors as-is
+        raise
+    except Exception as exc:
+        logger.error("Unexpected error in command execution", 
                     extra={"command": cmd[0], "cwd": cwd, "error": str(exc)})
-        raise ToolError(f"Failed to execute '{cmd[0]}': {exc}") from exc
+        raise ToolError(f"Unexpected error executing '{cmd[0]}': {exc}") from exc
 
 
 def _run_single_linter(lang: str, tool: str, repo_path: str) -> tuple[str, str]:
