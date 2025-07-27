@@ -5,15 +5,46 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "autogen_code_review_bot"
 version = "0.0.1"
+description = "Two-agent coder + reviewer loop using Microsoft AutoGen for automated PR critiques"
+readme = "README.md"
+license = {file = "LICENSE"}
+authors = [
+    {name = "Terragon Labs", email = "info@terragonlabs.ai"}
+]
+keywords = ["code-review", "autogen", "ai", "github", "automation", "sdlc"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Quality Assurance",
+    "Topic :: Software Development :: Version Control :: Git",
+]
 requires-python = ">=3.8"
 dependencies = [
     "PyYAML>=6.0.0,<7.0.0",
-    "requests>=2.31.0,<3.0.0"
+    "requests>=2.31.0,<3.0.0",
+    "pyautogen>=0.2.0,<1.0.0",
+    "openai>=1.0.0,<2.0.0",
+    "flask>=3.0.0,<4.0.0",
+    "click>=8.1.0,<9.0.0",
+    "python-dotenv>=1.0.0,<2.0.0",
+    "tenacity>=8.2.0,<9.0.0",
+    "structlog>=23.0.0,<24.0.0",
 ]
 
 [project.optional-dependencies]
 monitoring = [
-    "psutil>=5.9.0,<6.0.0"
+    "psutil>=5.9.0,<6.0.0",
+    "prometheus-client>=0.19.0,<1.0.0",
+    "opentelemetry-api>=1.20.0,<2.0.0",
+    "opentelemetry-sdk>=1.20.0,<2.0.0",
+    "opentelemetry-instrumentation-flask>=0.41b0,<1.0.0",
 ]
 dev = [
     "pre-commit>=3.5.0,<4.0.0",
@@ -22,8 +53,46 @@ dev = [
     "pytest>=7.4.0,<9.0.0",
     "pytest-cov>=4.1.0,<6.0.0",
     "pytest-xdist>=3.3.0,<4.0.0",
+    "pytest-mock>=3.12.0,<4.0.0",
+    "pytest-asyncio>=0.21.0,<1.0.0",
     "detect-secrets>=1.4.0,<2.0.0",
+    "mypy>=1.7.0,<2.0.0",
+    "types-PyYAML>=6.0.0,<7.0.0",
+    "types-requests>=2.31.0,<3.0.0",
+    "black>=23.11.0,<24.0.0",
+    "isort>=5.12.0,<6.0.0",
+    "coverage[toml]>=7.3.0,<8.0.0",
+    "tox>=4.11.0,<5.0.0",
 ]
+test = [
+    "pytest>=7.4.0,<9.0.0",
+    "pytest-cov>=4.1.0,<6.0.0",
+    "pytest-xdist>=3.3.0,<4.0.0",
+    "pytest-mock>=3.12.0,<4.0.0",
+    "pytest-asyncio>=0.21.0,<1.0.0",
+]
+docs = [
+    "mkdocs>=1.5.0,<2.0.0",
+    "mkdocs-material>=9.4.0,<10.0.0",
+    "mkdocs-mermaid2-plugin>=1.1.0,<2.0.0",
+]
+performance = [
+    "locust>=2.17.0,<3.0.0",
+    "memory-profiler>=0.61.0,<1.0.0",
+    "py-spy>=0.3.14,<1.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/terragonlabs/autogen-code-review-bot"
+Documentation = "https://github.com/terragonlabs/autogen-code-review-bot/wiki"
+Repository = "https://github.com/terragonlabs/autogen-code-review-bot"
+Issues = "https://github.com/terragonlabs/autogen-code-review-bot/issues"
+Changelog = "https://github.com/terragonlabs/autogen-code-review-bot/blob/main/CHANGELOG.md"
+
+[project.scripts]
+autogen-review = "autogen_code_review_bot.cli:main"
+review-pr = "autogen_code_review_bot.cli:review_pr"
+setup-webhook = "autogen_code_review_bot.cli:setup_webhook"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
@@ -31,3 +100,139 @@ packages = [
     "autogen_code_review_bot",
     "autogen_review_bot",
 ]
+
+# Ruff configuration
+[tool.ruff]
+target-version = "py38"
+line-length = 88
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings  
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+    "S",   # bandit security
+    "N",   # pep8-naming
+]
+ignore = [
+    "E501",  # line too long, handled by black
+    "B008",  # do not perform function calls in argument defaults
+    "S101",  # use of assert detected
+]
+
+[tool.ruff.per-file-ignores]
+"tests/*" = ["S101", "S106", "S108"]  # Allow assert and hardcoded passwords in tests
+
+[tool.ruff.isort]
+known-first-party = ["autogen_code_review_bot", "autogen_review_bot"]
+
+# Black configuration
+[tool.black]
+line-length = 88
+target-version = ['py38', 'py39', 'py310', 'py311', 'py312']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+# MyPy configuration
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+[[tool.mypy.overrides]]
+module = [
+    "autogen.*",
+    "openai.*",
+    "flask.*",
+]
+ignore_missing_imports = true
+
+# Pytest configuration
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "--cov=autogen_code_review_bot",
+    "--cov-report=term-missing",
+    "--cov-report=html:htmlcov",
+    "--cov-report=xml",
+    "--cov-fail-under=80",
+]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+    "security: marks tests as security tests",
+    "performance: marks tests as performance tests",
+]
+
+# Coverage configuration
+[tool.coverage.run]
+source = ["autogen_code_review_bot"]
+branch = true
+omit = [
+    "*/tests/*",
+    "*/test_*",
+    "*/__pycache__/*",
+    "*/venv/*",
+    "*/.venv/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]
+
+[tool.coverage.html]
+directory = "htmlcov"
+
+# Bandit security linter configuration  
+[tool.bandit]
+exclude_dirs = ["tests", "test_*"]
+skips = ["B101", "B601"]  # Skip assert statements and shell injection in tests
+
+# isort configuration
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 88
+known_first_party = ["autogen_code_review_bot", "autogen_review_bot"]
+known_third_party = ["autogen", "openai", "flask", "requests", "yaml"]

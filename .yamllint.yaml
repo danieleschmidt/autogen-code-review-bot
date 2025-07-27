@@ -1,0 +1,57 @@
+# YAML Linting Configuration for AutoGen Code Review Bot
+
+extends: default
+
+rules:
+  # Line length rules
+  line-length:
+    max: 120
+    level: warning
+    
+  # Indentation rules
+  indentation:
+    spaces: 2
+    indent-sequences: true
+    check-multi-line-strings: false
+    
+  # Comments rules
+  comments:
+    min-spaces-from-content: 1
+    
+  # Document rules
+  document-start:
+    present: false
+    
+  document-end:
+    present: false
+    
+  # Empty lines rules
+  empty-lines:
+    max: 2
+    max-start: 0
+    max-end: 1
+    
+  # Key rules
+  key-duplicates: enable
+  key-ordering: disable
+  
+  # Octal values
+  octal-values:
+    forbid-implicit-octal: true
+    forbid-explicit-octal: true
+    
+  # Quotation rules
+  quoted-strings:
+    quote-type: any
+    required: only-when-needed
+    
+  # Truthy values
+  truthy:
+    allowed-values: ['true', 'false', 'yes', 'no']
+    check-keys: true
+
+# File-specific overrides
+ignore: |
+  .github/workflows/
+  .pre-commit-config.yaml
+  node_modules/

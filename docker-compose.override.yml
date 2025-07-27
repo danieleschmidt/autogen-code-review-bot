@@ -1,0 +1,88 @@
+# Docker Compose override for local development
+# This file extends docker-compose.yml with development-specific settings
+
+version: '3.8'
+
+services:
+  # Development overrides for the main bot service
+  bot:
+    build:
+      target: development
+    environment:
+      - FLASK_ENV=development
+      - FLASK_DEBUG=true
+      - LOG_LEVEL=DEBUG
+      - BOT_CONFIG_PATH=/app/config/development.yaml
+    volumes:
+      # Enable live code reloading
+      - ./src:/app/src:ro
+      - ./config:/app/config:ro
+      - ./bot.py:/app/bot.py:ro
+      - ./review_pr.py:/app/review_pr.py:ro
+      - ./setup_webhook.py:/app/setup_webhook.py:ro
+      - ./planner.py:/app/planner.py:ro
+    ports:
+      # Expose additional ports for debugging
+      - "5000:5000"
+      - "5678:5678"  # Debug port
+    command: python bot.py --config config/development.yaml --debug
+
+  # Development Redis with more verbose logging
+  redis:
+    command: redis-server --appendonly yes --loglevel verbose
+
+  # Add a development database (PostgreSQL)
+  postgres:
+    image: postgres:15-alpine
+    container_name: autogen-postgres-dev
+    environment:
+      - POSTGRES_DB=autogen_dev
+      - POSTGRES_USER=autogen
+      - POSTGRES_PASSWORD=dev_password
+      - POSTGRES_HOST_AUTH_METHOD=trust
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    networks:
+      - bot_network
+
+  # Add pgAdmin for database management
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: autogen-pgadmin
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@autogen.local
+      - PGADMIN_DEFAULT_PASSWORD=admin
+    ports:
+      - "8080:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - bot_network
+    depends_on:
+      - postgres
+
+  # Development tools container
+  dev-tools:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: autogen-dev-tools
+    volumes:
+      - .:/app
+      - dev_tools_cache:/home/botuser/.cache
+    working_dir: /app
+    command: tail -f /dev/null  # Keep container running
+    networks:
+      - bot_network
+
+# Additional volumes for development
+volumes:
+  postgres_dev_data:
+    driver: local
+  pgadmin_data:
+    driver: local
+  dev_tools_cache:
+    driver: local
