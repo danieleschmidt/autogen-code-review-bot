@@ -1,0 +1,158 @@
+# Docker ignore file for AutoGen Code Review Bot
+# Reduces build context size and improves build performance
+
+# Version control
+.git
+.gitignore
+.github/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Testing
+.coverage
+.pytest_cache/
+.hypothesis/
+.tox/
+.nox/
+htmlcov/
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+
+# Linting
+.mypy_cache/
+.ruff_cache/
+.pylint.d/
+
+# Documentation
+docs/_build/
+site/
+
+# Logs
+*.log
+logs/
+
+# Cache
+.cache/
+tmp/
+temp/
+.tmp/
+.autogen_cache/
+
+# Local configuration
+config/local.yaml
+config/development.local.yaml
+config/production.local.yaml
+*.local.*
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+data/
+
+# Docker
+.docker/
+docker-data/
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# Security reports
+security-report.json
+bandit-report.json
+safety-report.json
+
+# Performance reports
+profile.svg
+*.prof
+performance-results/
+locust-report.html
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Node modules (if any)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Large files
+*.tar.gz
+*.zip
+*.7z
+
+# Experimental
+experiments/
+sandbox/
+playground/
+
+# CI/CD
+.github/workflows/
+
+# Documentation source
+README.md
+CHANGELOG.md
+CONTRIBUTING.md
+ARCHITECTURE.md
+docs/
+
+# Development scripts
+scripts/
+dev-scripts/
+
+# Test data
+tests/fixtures/
+
+# Makefile
+Makefile

@@ -1,0 +1,261 @@
+# Docker Compose configuration for AutoGen Code Review Bot
+# Provides a complete development and deployment environment
+
+version: '3.8'
+
+services:
+  # Main application service
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+      args:
+        BUILD_DATE: ${BUILD_DATE:-}
+        VERSION: ${VERSION:-0.0.1}
+        VCS_REF: ${VCS_REF:-}
+    image: autogen-code-review-bot:${VERSION:-latest}
+    container_name: autogen-bot
+    restart: unless-stopped
+    environment:
+      # Application configuration
+      - BOT_CONFIG_PATH=/app/config/production.yaml
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - PORT=${PORT:-5000}
+      - WORKERS=${WORKERS:-1}
+      
+      # GitHub configuration
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - GITHUB_WEBHOOK_SECRET=${GITHUB_WEBHOOK_SECRET}
+      
+      # OpenAI configuration
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT:-}
+      - AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY:-}
+      
+      # Performance settings
+      - CACHE_ENABLED=${CACHE_ENABLED:-true}
+      - PARALLEL_EXECUTION=${PARALLEL_EXECUTION:-true}
+      - MAX_WORKERS=${MAX_WORKERS:-4}
+      - TIMEOUT_SECONDS=${TIMEOUT_SECONDS:-300}
+      
+      # Security settings
+      - SECRET_KEY=${SECRET_KEY}
+      - WEBHOOK_VERIFY_SSL=${WEBHOOK_VERIFY_SSL:-true}
+      
+      # Redis connection (if using external cache)
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      
+      # Monitoring
+      - ENABLE_METRICS=${ENABLE_METRICS:-true}
+      - METRICS_PORT=${METRICS_PORT:-9090}
+      - SENTRY_DSN=${SENTRY_DSN:-}
+    ports:
+      - "${PORT:-5000}:5000"
+      - "${METRICS_PORT:-9090}:9090"
+    volumes:
+      # Persistent cache and logs
+      - bot_cache:/home/botuser/.cache/autogen-review
+      - bot_logs:/app/logs
+      # Configuration override
+      - ./config:/app/config:ro
+    networks:
+      - bot_network
+    depends_on:
+      - redis
+    healthcheck:
+      test: ["CMD", "/app/healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+
+  # Redis cache service
+  redis:
+    image: redis:7-alpine
+    container_name: autogen-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    networks:
+      - bot_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.1'
+
+  # Prometheus monitoring (optional)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: autogen-prometheus
+    restart: unless-stopped
+    ports:
+      - "9091:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    networks:
+      - bot_network
+    profiles:
+      - monitoring
+
+  # Grafana dashboard (optional)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: autogen-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_INSTALL_PLUGINS=redis-datasource
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana:/etc/grafana/provisioning:ro
+    networks:
+      - bot_network
+    depends_on:
+      - prometheus
+    profiles:
+      - monitoring
+
+  # Development service
+  bot-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    image: autogen-code-review-bot:dev
+    container_name: autogen-bot-dev
+    environment:
+      - FLASK_ENV=development
+      - FLASK_DEBUG=true
+      - LOG_LEVEL=DEBUG
+      - BOT_CONFIG_PATH=/app/config/development.yaml
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - GITHUB_WEBHOOK_SECRET=${GITHUB_WEBHOOK_SECRET}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - REDIS_URL=redis://redis:6379/1
+    ports:
+      - "5001:5000"
+      - "9091:9090"
+    volumes:
+      # Live code reloading
+      - ./src:/app/src
+      - ./config:/app/config
+      - ./tests:/app/tests
+      - bot_dev_cache:/home/botuser/.cache/autogen-review
+      - bot_dev_logs:/app/logs
+    networks:
+      - bot_network
+    depends_on:
+      - redis
+    profiles:
+      - development
+
+  # Testing service
+  bot-test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: testing
+    image: autogen-code-review-bot:test
+    container_name: autogen-bot-test
+    environment:
+      - PYTHONPATH=/app
+      - TEST_DATABASE_URL=sqlite:///test.db
+    volumes:
+      - ./tests:/app/tests
+      - ./src:/app/src
+      - test_reports:/app/test-reports
+    networks:
+      - bot_network
+    profiles:
+      - testing
+
+  # Load testing with Locust
+  locust:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: testing
+    image: autogen-code-review-bot:test
+    container_name: autogen-locust
+    command: locust -f tests/performance/locustfile.py --host=http://bot:5000
+    ports:
+      - "8089:8089"
+    networks:
+      - bot_network
+    depends_on:
+      - bot
+    profiles:
+      - performance
+
+  # Nginx reverse proxy (for production)
+  nginx:
+    image: nginx:alpine
+    container_name: autogen-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - nginx_logs:/var/log/nginx
+    networks:
+      - bot_network
+    depends_on:
+      - bot
+    profiles:
+      - production
+
+# Named volumes for data persistence
+volumes:
+  bot_cache:
+    driver: local
+  bot_logs:
+    driver: local
+  bot_dev_cache:
+    driver: local
+  bot_dev_logs:
+    driver: local
+  redis_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+  test_reports:
+    driver: local
+  nginx_logs:
+    driver: local
+
+# Networks
+networks:
+  bot_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
