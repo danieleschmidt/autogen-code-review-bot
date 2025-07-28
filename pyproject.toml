@@ -32,6 +32,11 @@ packages = [
     "autogen_review_bot",
 ]
 
+# Development convenience scripts
+[project.scripts]
+bot = "autogen_code_review_bot.cli:main"
+webhook = "autogen_code_review_bot.webhook:main"
+
 [tool.ruff]
 target-version = "py38"
 line-length = 88
