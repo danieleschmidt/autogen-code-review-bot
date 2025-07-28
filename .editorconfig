@@ -1,5 +1,6 @@
 root = true
 
+# Default settings for all files
 [*]
 charset = utf-8
 end_of_line = lf
@@ -9,10 +10,12 @@ insert_final_newline = true
 trim_trailing_whitespace = true
 max_line_length = 88
 
+# Python files - follows PEP 8 standards
 [*.py]
 indent_size = 4
 max_line_length = 88
 
+# JavaScript/TypeScript files
 [*.{js,ts,jsx,tsx}]
 indent_size = 2
 max_line_length = 100
