@@ -1,0 +1,129 @@
+# Prometheus alerting rules for AutoGen Code Review Bot
+
+groups:
+  - name: autogen-bot.rules
+    interval: 30s
+    rules:
+      # High-level service availability
+      - alert: AutoGenBotDown
+        expr: up{job="autogen-bot"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: autogen-bot
+        annotations:
+          summary: "AutoGen Bot is down"
+          description: "AutoGen Code Review Bot has been down for more than 1 minute"
+          runbook_url: "https://github.com/your-org/autogen-bot/wiki/Runbook#bot-down"
+
+      # Response time alerts
+      - alert: HighResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="autogen-bot"}[5m])) > 30
+        for: 5m
+        labels:
+          severity: warning
+          service: autogen-bot
+        annotations:
+          summary: "High response time detected"
+          description: "95th percentile response time is {{ $value }}s for 5 minutes"
+
+      # Error rate alerts
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{job="autogen-bot",status=~"5.."}[5m]) / rate(http_requests_total{job="autogen-bot"}[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+          service: autogen-bot
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value | humanizePercentage }} for 2 minutes"
+
+      # Memory usage alerts
+      - alert: HighMemoryUsage
+        expr: (process_resident_memory_bytes{job="autogen-bot"} / 1024 / 1024 / 1024) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          service: autogen-bot
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value | humanize }}GB"
+
+      # GitHub API rate limiting
+      - alert: GitHubRateLimitWarning
+        expr: github_rate_limit_remaining{job="autogen-bot"} < 100
+        for: 1m
+        labels:
+          severity: warning
+          service: autogen-bot
+        annotations:
+          summary: "GitHub API rate limit approaching"
+          description: "Only {{ $value }} GitHub API requests remaining"
+
+      - alert: GitHubRateLimitCritical
+        expr: github_rate_limit_remaining{job="autogen-bot"} < 10
+        for: 30s
+        labels:
+          severity: critical
+          service: autogen-bot
+        annotations:
+          summary: "GitHub API rate limit critical"
+          description: "Only {{ $value }} GitHub API requests remaining"
+
+      # Queue processing alerts
+      - alert: ProcessingQueueBacklog
+        expr: review_queue_size{job="autogen-bot"} > 50
+        for: 10m
+        labels:
+          severity: warning
+          service: autogen-bot
+        annotations:
+          summary: "Review queue backlog detected"
+          description: "Review queue has {{ $value }} items pending for 10 minutes"
+
+      # Cache performance
+      - alert: LowCacheHitRate
+        expr: rate(cache_hits_total{job="autogen-bot"}[10m]) / (rate(cache_hits_total{job="autogen-bot"}[10m]) + rate(cache_misses_total{job="autogen-bot"}[10m])) < 0.7
+        for: 15m
+        labels:
+          severity: warning
+          service: autogen-bot
+        annotations:
+          summary: "Low cache hit rate"
+          description: "Cache hit rate is {{ $value | humanizePercentage }} for 15 minutes"
+
+      # Agent conversation failures
+      - alert: AgentConversationFailures
+        expr: rate(agent_conversation_failures_total{job="autogen-bot"}[5m]) > 0.1
+        for: 3m
+        labels:
+          severity: warning
+          service: autogen-bot
+        annotations:
+          summary: "Agent conversation failures detected"
+          description: "Agent conversations failing at {{ $value }} per second"
+
+  - name: system.rules
+    interval: 30s
+    rules:
+      # Disk space alerts
+      - alert: DiskSpaceLow
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) < 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "Low disk space"
+          description: "Disk space is {{ $value | humanizePercentage }} full"
+
+      # CPU usage alerts
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 10m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is {{ $value }}% for 10 minutes"
