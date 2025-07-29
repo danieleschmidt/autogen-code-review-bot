@@ -1,0 +1,63 @@
+# Prometheus configuration for AutoGen Code Review Bot monitoring
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'autogen-bot'
+    environment: 'production'
+
+rule_files:
+  - "rules/*.yml"
+
+scrape_configs:
+  # AutoGen Bot application metrics
+  - job_name: 'autogen-bot'
+    static_configs:
+      - targets: ['autogen-bot:8080']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+    honor_labels: true
+    
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'autogen-bot'
+      - source_labels: [__address__]
+        target_label: service
+        replacement: 'code-review-bot'
+
+  # System metrics via node_exporter (if available)
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 15s
+    
+  # Redis metrics (if using Redis for caching)
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:6379']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  # Docker container metrics via cAdvisor
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+    scrape_interval: 20s
+    metrics_path: '/metrics'
+
+  # GitHub API rate limiting and webhook metrics
+  - job_name: 'github-metrics'
+    static_configs:
+      - targets: ['autogen-bot:8080']
+    metrics_path: '/github/metrics'
+    scrape_interval: 60s
+
+# Alerting configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
