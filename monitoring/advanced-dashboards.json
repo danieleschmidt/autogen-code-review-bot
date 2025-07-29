@@ -1,0 +1,378 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "AutoGen Code Review Bot - Advanced SRE Dashboard",
+    "tags": ["autogen", "sre", "monitoring"],
+    "timezone": "browser",
+    "refresh": "30s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Service Level Objectives (SLOs)",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "rate(http_requests_total{job=\"autogen-bot\",code!~\"5..\"}[30d]) / rate(http_requests_total{job=\"autogen-bot\"}[30d]) * 100",
+            "legendFormat": "Availability %"
+          },
+          {
+            "expr": "histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[5m])) * 1000",
+            "legendFormat": "P99 Latency (ms)"
+          },
+          {
+            "expr": "rate(http_requests_total{job=\"autogen-bot\",code=~\"5..\"}[1h]) * 100",
+            "legendFormat": "Error Rate %"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 99.9},
+                {"color": "green", "value": 99.95}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+      },
+      {
+        "id": 2,
+        "title": "Error Budget Burn Rate",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "error_budget_burn_rate_1h",
+            "legendFormat": "1h Burn Rate"
+          },
+          {
+            "expr": "error_budget_burn_rate_6h",
+            "legendFormat": "6h Burn Rate"
+          },
+          {
+            "expr": "error_budget_burn_rate_24h",
+            "legendFormat": "24h Burn Rate"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": 0},
+                {"color": "yellow", "value": 3},
+                {"color": "red", "value": 14.4}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+      },
+      {
+        "id": 3,
+        "title": "Golden Signals - Traffic",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(http_requests_total{job=\"autogen-bot\"}[5m])",
+            "legendFormat": "Requests/sec"
+          },
+          {
+            "expr": "active_review_sessions",
+            "legendFormat": "Active Reviews"
+          },
+          {
+            "expr": "rate(webhook_events_total[5m])",
+            "legendFormat": "Webhooks/sec"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "reqps"
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+      },
+      {
+        "id": 4,
+        "title": "Golden Signals - Latency",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, rate(http_request_duration_seconds_bucket[5m])) * 1000",
+            "legendFormat": "P50"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) * 1000",
+            "legendFormat": "P95"
+          },
+          {
+            "expr": "histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[5m])) * 1000",
+            "legendFormat": "P99"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ms",
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": 0},
+                {"color": "yellow", "value": 500},
+                {"color": "red", "value": 1000}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+      },
+      {
+        "id": 5,
+        "title": "Golden Signals - Errors",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(http_requests_total{job=\"autogen-bot\",code=~\"4..\"}[5m])",
+            "legendFormat": "4xx Errors"
+          },
+          {
+            "expr": "rate(http_requests_total{job=\"autogen-bot\",code=~\"5..\"}[5m])",
+            "legendFormat": "5xx Errors"
+          },
+          {
+            "expr": "rate(review_failures_total[5m])",
+            "legendFormat": "Review Failures"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "reqps"
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16}
+      },
+      {
+        "id": 6,
+        "title": "Golden Signals - Saturation",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "cpu_usage_percent",
+            "legendFormat": "CPU %"
+          },
+          {
+            "expr": "memory_usage_percent",
+            "legendFormat": "Memory %"
+          },
+          {
+            "expr": "queue_depth",
+            "legendFormat": "Queue Depth"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "max": 100,
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": 0},
+                {"color": "yellow", "value": 70},
+                {"color": "red", "value": 85}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16}
+      },
+      {
+        "id": 7,
+        "title": "Business Metrics",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "review_completion_rate_24h * 100",
+            "legendFormat": "Review Completion Rate"
+          },
+          {
+            "expr": "avg(user_satisfaction_score)",
+            "legendFormat": "User Satisfaction"
+          },
+          {
+            "expr": "cache_hit_rate * 100",
+            "legendFormat": "Cache Hit Rate"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 80},
+                {"color": "green", "value": 95}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24}
+      },
+      {
+        "id": 8,
+        "title": "Infrastructure Health",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "up{job=\"autogen-bot\"}",
+            "legendFormat": "Service Up"
+          },
+          {
+            "expr": "kubernetes_pod_restarts_total",
+            "legendFormat": "Pod Restarts"
+          },
+          {
+            "expr": "node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes * 100",
+            "legendFormat": "Available Memory %"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24}
+      },
+      {
+        "id": 9,
+        "title": "Agent Performance",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "avg(agent_response_time_seconds)",
+            "legendFormat": "Avg Response Time"
+          },
+          {
+            "expr": "rate(agent_conversations_total[5m])",
+            "legendFormat": "Conversations/sec"
+          },
+          {
+            "expr": "agent_queue_length",
+            "legendFormat": "Queue Length"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s"
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 32}
+      },
+      {
+        "id": 10,
+        "title": "Security Metrics",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(auth_failures_total[5m])",
+            "legendFormat": "Auth Failures/sec"
+          },
+          {
+            "expr": "rate(suspicious_activity_total[5m])",
+            "legendFormat": "Suspicious Activity/sec"
+          },
+          {
+            "expr": "vulnerability_count",
+            "legendFormat": "Known Vulnerabilities"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 32}
+      },
+      {
+        "id": 11,
+        "title": "Cost Optimization",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "monthly_compute_cost",
+            "legendFormat": "Monthly Compute Cost"
+          },
+          {
+            "expr": "cost_per_review",
+            "legendFormat": "Cost per Review"
+          },
+          {
+            "expr": "resource_utilization_efficiency * 100",
+            "legendFormat": "Resource Efficiency %"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "currencyUSD"
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 40}
+      },
+      {
+        "id": 12,
+        "title": "Capacity Planning",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "predict_linear(resource_usage[1d], 7*24*3600)",
+            "legendFormat": "Predicted Usage (7d)"
+          },
+          {
+            "expr": "resource_capacity",
+            "legendFormat": "Current Capacity"
+          },
+          {
+            "expr": "growth_rate_percentage",
+            "legendFormat": "Growth Rate %"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 40}
+      }
+    ],
+    "annotations": {
+      "list": [
+        {
+          "name": "Deployments",
+          "datasource": "prometheus",
+          "enable": true,
+          "expr": "increase(deployment_events_total[1m])",
+          "iconColor": "blue",
+          "title": "Deployment"
+        },
+        {
+          "name": "Incidents",
+          "datasource": "prometheus", 
+          "enable": true,
+          "expr": "increase(incident_events_total[1m])",
+          "iconColor": "red",
+          "title": "Incident"
+        }
+      ]
+    },
+    "templating": {
+      "list": [
+        {
+          "name": "environment",
+          "type": "query",
+          "query": "label_values(environment)",
+          "current": {
+            "value": "production",
+            "text": "production"
+          }
+        },
+        {
+          "name": "service",
+          "type": "query", 
+          "query": "label_values(service)",
+          "current": {
+            "value": "autogen-bot",
+            "text": "autogen-bot"
+          }
+        }
+      ]
+    }
+  }
+}
