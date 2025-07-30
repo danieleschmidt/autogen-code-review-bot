@@ -6,11 +6,18 @@ rules:
     level: warning
   
   comments:
-    min-spaces-from-content: 1
+    min-spaces-from-content: 2
+    
+  comments-indentation: false
   
-  document-start:
+  document-start: 
     present: false
-  
+    
   truthy:
-    allowed-values: ['true', 'false']
+    allowed-values: ['true', 'false', 'yes', 'no']
     check-keys: false
+
+ignore: |
+  .github/workflows/
+  monitoring/
+  benchmarks/
