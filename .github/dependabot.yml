@@ -1,0 +1,47 @@
+version: 2
+updates:
+  # Python dependencies
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "@terragon-labs/security"
+    assignees:
+      - "@terragon-labs/maintainers"
+    labels:
+      - "dependencies"
+      - "python"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 3
+    reviewers:
+      - "@terragon-labs/devops"
+    labels:
+      - "dependencies"
+      - "ci/cd"
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+
+  # Docker dependencies
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 2
+    labels:
+      - "dependencies"
+      - "docker"
+    commit-message:
+      prefix: "docker"
