@@ -1,11 +1,16 @@
 {
-  "name": "AutoGen Code Review Bot",
+  "name": "AutoGen Code Review Bot - Enterprise Development Environment",
   "image": "mcr.microsoft.com/devcontainers/python:3.11",
   "features": {
     "ghcr.io/devcontainers/features/docker-in-docker:2": {},
     "ghcr.io/devcontainers/features/github-cli:1": {},
     "ghcr.io/devcontainers/features/node:1": {
       "version": "18"
+    },
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "installZsh": true,
+      "configureZshAsDefaultShell": true,
+      "installOhMyZsh": true
     }
   },
   "customizations": {
@@ -15,50 +20,117 @@
         "ms-python.black-formatter",
         "charliermarsh.ruff",
         "ms-python.mypy-type-checker",
+        "ms-python.isort",
         "ms-vscode.vscode-json",
         "redhat.vscode-yaml",
         "github.vscode-pull-request-github",
+        "github.vscode-github-actions",
         "ms-vscode.test-adapter-converter",
         "hbenl.vscode-test-explorer",
         "littlefoxteam.vscode-python-test-adapter",
         "davidanson.vscode-markdownlint",
-        "github.copilot"
+        "yzhang.markdown-all-in-one",
+        "github.copilot",
+        "github.copilot-chat",
+        "ms-azuretools.vscode-docker",
+        "timonwong.shellcheck",
+        "esbenp.prettier-vscode",
+        "ms-vscode-remote.vscode-remote-extensionpack",
+        "formulahendry.auto-rename-tag",
+        "ms-vscode.vscode-typescript-next"
       ],
       "settings": {
         "python.defaultInterpreterPath": "/usr/local/bin/python",
         "python.linting.enabled": true,
         "python.linting.ruffEnabled": true,
+        "python.linting.mypyEnabled": true,
         "python.formatting.provider": "black",
+        "python.sortImports.provider": "isort",
         "python.testing.pytestEnabled": true,
         "python.testing.unittestEnabled": false,
+        "python.testing.pytestArgs": [
+          "tests",
+          "-v",
+          "--tb=short"
+        ],
         "files.exclude": {
           "**/__pycache__": true,
           "**/.pytest_cache": true,
-          "**/*.pyc": true
+          "**/*.pyc": true,
+          "**/.mypy_cache": true,
+          "**/.ruff_cache": true
+        },
+        "files.associations": {
+          "*.yml": "yaml",
+          "*.yaml": "yaml",
+          "Dockerfile*": "dockerfile"
+        },
+        "yaml.schemas": {
+          "https://json.schemastore.org/github-workflow.json": ".github/workflows/*.yml",
+          "https://json.schemastore.org/dependabot-v2.json": ".github/dependabot.yml"
         },
         "editor.formatOnSave": true,
         "editor.codeActionsOnSave": {
-          "source.organizeImports": true
-        }
+          "source.organizeImports": true,
+          "source.fixAll": true
+        },
+        "git.autofetch": true,
+        "git.enableSmartCommit": true,
+        "terminal.integrated.defaultProfile.linux": "zsh",
+        "workbench.colorTheme": "Default Dark+",
+        "security.workspace.trust.untrustedFiles": "open"
       }
     }
   },
-  "postCreateCommand": "pip install -e .[dev] && pre-commit install",
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "postStartCommand": "bash .devcontainer/post-start.sh",
   "remoteUser": "vscode",
+  "containerUser": "vscode",
   "workspaceFolder": "/workspace",
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
   "mounts": [
     "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
   ],
-  "forwardPorts": [8000, 8080],
+  "forwardPorts": [8000, 8080, 3000, 9090, 9093, 6379],
   "portsAttributes": {
     "8000": {
-      "label": "Bot API",
-      "onAutoForward": "openPreview"
+      "label": "AutoGen Bot API",
+      "onAutoForward": "notify"
     },
     "8080": {
-      "label": "Monitoring",
-      "onAutoForward": "openPreview"
+      "label": "Monitoring Dashboard",
+      "onAutoForward": "silent"
+    },
+    "3000": {
+      "label": "Grafana",
+      "onAutoForward": "silent"
+    },
+    "9090": {
+      "label": "Prometheus",
+      "onAutoForward": "ignore"
+    },
+    "9093": {
+      "label": "AlertManager",
+      "onAutoForward": "ignore"
+    },
+    "6379": {
+      "label": "Redis",
+      "onAutoForward": "ignore"
+    }
+  },
+  "containerEnv": {
+    "ENVIRONMENT": "development",
+    "PYTHONPATH": "/workspace/src",
+    "REDIS_URL": "redis://localhost:6379",
+    "LOG_LEVEL": "DEBUG",
+    "GITHUB_ACTIONS": "false"
+  },
+  "secrets": {
+    "GITHUB_TOKEN": {
+      "description": "GitHub token for API access during development"
+    },
+    "OPENAI_API_KEY": {
+      "description": "OpenAI API key for LLM features"
     }
   }
 }
