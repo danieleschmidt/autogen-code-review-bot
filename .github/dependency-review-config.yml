@@ -1,0 +1,42 @@
+fail_on_severity: 'moderate'
+allow_licenses:
+  - 'MIT'
+  - 'Apache-2.0'
+  - 'BSD-2-Clause'
+  - 'BSD-3-Clause'
+  - 'ISC'
+  - 'GPL-3.0'
+  - 'LGPL-2.1'
+  - 'Python-2.0'
+  - 'PSF-2.0'
+  
+deny_licenses:
+  - 'AGPL-1.0'
+  - 'AGPL-3.0'
+  - 'GPL-2.0'
+  - 'LGPL-3.0'
+  - 'MPL-2.0'
+
+fail_on_scopes:
+  - 'runtime'
+  - 'development'
+
+allow_ghsas:
+  # Allow specific GitHub Security Advisories if needed
+  # - GHSA-xxxx-xxxx-xxxx
+
+deny_packages:
+  # Deny specific packages if needed
+  # - name: 'package-name'
+  #   version: '>= 1.0.0'
+
+# Comment creation settings
+comment_summary_in_pr: 'always'
+warn_only: false
+
+# Vulnerability database settings
+vulnerability_check: true
+license_check: true
+
+# Custom rules for enterprise compliance
+config_file_path: '.github/dependency-review-config.yml'
