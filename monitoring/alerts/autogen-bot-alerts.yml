@@ -1,0 +1,227 @@
+# AutoGen Bot Enterprise Alerting Rules
+
+groups:
+  - name: autogen-bot.rules
+    interval: 30s
+    rules:
+      # Service Availability Alerts
+      - alert: AutoGenBotDown
+        expr: up{job="autogen-bot"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: autogen-bot
+          team: sre
+        annotations:
+          summary: "AutoGen Bot service is down"
+          description: "AutoGen Bot has been down for more than 1 minute on instance {{ $labels.instance }}"
+          runbook_url: "https://docs.company.com/runbooks/autogen-bot-down"
+
+      - alert: AutoGenBotHighErrorRate
+        expr: rate(http_requests_total{job="autogen-bot",status=~"5.."}[5m]) / rate(http_requests_total{job="autogen-bot"}[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+          service: autogen-bot
+          team: engineering
+        annotations:
+          summary: "AutoGen Bot high error rate"
+          description: "AutoGen Bot error rate is {{ $value | humanizePercentage }} on instance {{ $labels.instance }}"
+          runbook_url: "https://docs.company.com/runbooks/high-error-rate"
+
+      - alert: AutoGenBotHighLatency
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="autogen-bot"}[5m])) > 5
+        for: 5m
+        labels:
+          severity: warning
+          service: autogen-bot
+          team: engineering
+        annotations:
+          summary: "AutoGen Bot high latency"
+          description: "AutoGen Bot 95th percentile latency is {{ $value }}s on instance {{ $labels.instance }}"
+          runbook_url: "https://docs.company.com/runbooks/high-latency"
+
+      # Resource Usage Alerts
+      - alert: AutoGenBotHighMemoryUsage
+        expr: (container_memory_usage_bytes{name="autogen-bot"} / container_spec_memory_limit_bytes{name="autogen-bot"}) > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          service: autogen-bot
+          team: sre
+        annotations:
+          summary: "AutoGen Bot high memory usage"
+          description: "AutoGen Bot memory usage is {{ $value | humanizePercentage }} on instance {{ $labels.instance }}"
+          runbook_url: "https://docs.company.com/runbooks/high-memory-usage"
+
+      - alert: AutoGenBotHighCPUUsage
+        expr: rate(container_cpu_usage_seconds_total{name="autogen-bot"}[5m]) > 0.8
+        for: 10m
+        labels:
+          severity: warning
+          service: autogen-bot
+          team: sre
+        annotations:
+          summary: "AutoGen Bot high CPU usage"
+          description: "AutoGen Bot CPU usage is {{ $value | humanizePercentage }} on instance {{ $labels.instance }}"
+          runbook_url: "https://docs.company.com/runbooks/high-cpu-usage"
+
+      # Queue and Processing Alerts
+      - alert: AutoGenBotQueueBacklog
+        expr: redis_list_length{key="webhook_queue"} > 100
+        for: 5m
+        labels:
+          severity: warning
+          service: autogen-bot
+          team: engineering
+        annotations:
+          summary: "AutoGen Bot queue backlog"
+          description: "AutoGen Bot webhook queue has {{ $value }} items pending processing"
+          runbook_url: "https://docs.company.com/runbooks/queue-backlog"
+
+      - alert: AutoGenBotProcessingTimeHigh
+        expr: histogram_quantile(0.95, rate(autogen_bot_processing_duration_seconds_bucket[5m])) > 300
+        for: 3m
+        labels:
+          severity: warning
+          service: autogen-bot
+          team: engineering
+        annotations:
+          summary: "AutoGen Bot high processing time"
+          description: "AutoGen Bot 95th percentile processing time is {{ $value }}s"
+          runbook_url: "https://docs.company.com/runbooks/slow-processing"
+
+      # GitHub API Integration Alerts
+      - alert: GitHubAPIRateLimitHigh
+        expr: github_api_remaining_requests < 100
+        for: 1m
+        labels:
+          severity: warning
+          service: autogen-bot
+          team: engineering
+        annotations:
+          summary: "GitHub API rate limit approaching"
+          description: "GitHub API has {{ $value }} requests remaining"
+          runbook_url: "https://docs.company.com/runbooks/github-rate-limit"
+
+      - alert: GitHubAPIDown
+        expr: probe_success{job="github-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: github
+          team: sre
+        annotations:
+          summary: "GitHub API is unreachable"
+          description: "GitHub API health check has been failing for more than 2 minutes"
+          runbook_url: "https://docs.company.com/runbooks/github-api-down"
+
+      # Security and Compliance Alerts
+      - alert: AutoGenBotSecurityScanFailed
+        expr: increase(autogen_bot_security_scan_failures_total[1h]) > 0
+        for: 0m
+        labels:
+          severity: high
+          service: autogen-bot
+          team: security
+        annotations:
+          summary: "AutoGen Bot security scan failed"
+          description: "Security scan has failed {{ $value }} times in the last hour"
+          runbook_url: "https://docs.company.com/runbooks/security-scan-failure"
+
+      - alert: AutoGenBotCertificateExpiring
+        expr: probe_ssl_earliest_cert_expiry{job="blackbox-ssl"} - time() < 7*24*3600
+        for: 0m
+        labels:
+          severity: warning
+          service: autogen-bot
+          team: sre
+        annotations:
+          summary: "SSL certificate expiring soon"
+          description: "SSL certificate for {{ $labels.instance }} expires in {{ $value | humanizeDuration }}"
+          runbook_url: "https://docs.company.com/runbooks/certificate-renewal"
+
+      # Business Logic Alerts
+      - alert: AutoGenBotNoRecentActivity
+        expr: increase(autogen_bot_pr_reviews_total[1h]) == 0 and hour() > 8 and hour() < 18
+        for: 2h
+        labels:
+          severity: warning
+          service: autogen-bot
+          team: engineering
+        annotations:
+          summary: "AutoGen Bot no recent activity"
+          description: "No PR reviews have been processed in the last 2 hours during business hours"
+          runbook_url: "https://docs.company.com/runbooks/no-activity"
+
+      - alert: AutoGenBotReviewQualityDegraded
+        expr: rate(autogen_bot_review_quality_score[5m]) < 0.7
+        for: 10m
+        labels:
+          severity: warning
+          service: autogen-bot
+          team: engineering
+        annotations:
+          summary: "AutoGen Bot review quality degraded"
+          description: "Average review quality score is {{ $value | humanizePercentage }} over the last 10 minutes"
+          runbook_url: "https://docs.company.com/runbooks/quality-degradation"
+
+  - name: infrastructure.rules
+    interval: 30s
+    rules:
+      # System Resource Alerts
+      - alert: NodeHighMemoryUsage
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          service: infrastructure
+          team: sre
+        annotations:
+          summary: "Node high memory usage"
+          description: "Node {{ $labels.instance }} memory usage is {{ $value | humanizePercentage }}"
+
+      - alert: NodeHighDiskUsage
+        expr: (node_filesystem_size_bytes - node_filesystem_free_bytes) / node_filesystem_size_bytes > 0.85
+        for: 5m
+        labels:
+          severity: warning
+          service: infrastructure
+          team: sre
+        annotations:
+          summary: "Node high disk usage"
+          description: "Node {{ $labels.instance }} disk usage is {{ $value | humanizePercentage }} on filesystem {{ $labels.mountpoint }}"
+
+      - alert: NodeLoadHigh
+        expr: node_load15 > 2 * count(node_cpu_seconds_total{mode="idle"}) by (instance)
+        for: 10m
+        labels:
+          severity: warning
+          service: infrastructure
+          team: sre
+        annotations:
+          summary: "Node high load average"
+          description: "Node {{ $labels.instance }} load average is {{ $value }}"
+
+      # Redis Alerts
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: redis
+          team: sre
+        annotations:
+          summary: "Redis is down"
+          description: "Redis instance {{ $labels.instance }} is down"
+
+      - alert: RedisHighMemoryUsage
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          service: redis
+          team: sre
+        annotations:
+          summary: "Redis high memory usage"
+          description: "Redis memory usage is {{ $value | humanizePercentage }} on instance {{ $labels.instance }}"
