@@ -1,0 +1,150 @@
+# Development Docker Compose for AutoGen Code Review Bot
+# Includes hot-reloading, debugging, and development tools
+
+version: '3.8'
+
+services:
+  autogen-bot-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+      args:
+        PYTHON_VERSION: "3.11"
+    image: autogen-code-review-bot:dev
+    container_name: autogen-bot-dev
+    restart: unless-stopped
+    
+    # Development environment variables
+    environment:
+      - PYTHONPATH=/app
+      - DEBUG=true
+      - LOG_LEVEL=DEBUG
+      - DEVELOPMENT=true
+      - CACHE_ENABLED=true
+      - PARALLEL_PROCESSING=true
+    
+    # Mount source code for hot-reloading
+    volumes:
+      - .:/app:rw
+      - dev_cache:/home/developer/.cache/autogen-review:rw
+      - ./logs:/app/logs:rw
+    
+    # Network configuration
+    ports:
+      - "8080:8080"  # Main application
+      - "8888:8888"  # Jupyter notebook
+      - "5000:5000"  # Debug server
+    
+    networks:
+      - autogen-dev-network
+    
+    # Keep container running for development
+    stdin_open: true
+    tty: true
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "python", "-c", "import autogen_code_review_bot; print('OK')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
+  # Redis for development caching
+  redis-dev:
+    image: redis:7-alpine
+    container_name: autogen-redis-dev
+    restart: unless-stopped
+    
+    # Development configuration (less restrictive)
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "128mb"]
+    
+    ports:
+      - "6379:6379"
+    
+    volumes:
+      - redis_dev_data:/data:rw
+    
+    networks:
+      - autogen-dev-network
+
+  # Development database (if needed)
+  postgres-dev:
+    image: postgres:15-alpine
+    container_name: autogen-postgres-dev
+    restart: unless-stopped
+    
+    environment:
+      - POSTGRES_DB=autogen_dev
+      - POSTGRES_USER=developer
+      - POSTGRES_PASSWORD=dev_password
+    
+    ports:
+      - "5432:5432"
+    
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data:rw
+    
+    networks:
+      - autogen-dev-network
+
+  # Monitoring stack for development
+  prometheus-dev:
+    image: prom/prometheus:latest
+    container_name: autogen-prometheus-dev
+    restart: unless-stopped
+    
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
+      - '--log.level=debug'
+    
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_dev_data:/prometheus:rw
+    
+    ports:
+      - "9090:9090"
+    
+    networks:
+      - autogen-dev-network
+
+  grafana-dev:
+    image: grafana/grafana:latest
+    container_name: autogen-grafana-dev
+    restart: unless-stopped
+    
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_LOG_LEVEL=debug
+    
+    volumes:
+      - grafana_dev_data:/var/lib/grafana:rw
+      - ./monitoring/grafana-dashboard.json:/var/lib/grafana/dashboards/autogen.json:ro
+    
+    ports:
+      - "3000:3000"
+    
+    networks:
+      - autogen-dev-network
+
+# Development network
+networks:
+  autogen-dev-network:
+    driver: bridge
+
+# Development volumes
+volumes:
+  dev_cache:
+    driver: local
+  redis_dev_data:
+    driver: local
+  postgres_dev_data:
+    driver: local
+  prometheus_dev_data:
+    driver: local
+  grafana_dev_data:
+    driver: local
+EOF < /dev/null
