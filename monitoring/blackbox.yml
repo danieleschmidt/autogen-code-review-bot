@@ -1,0 +1,108 @@
+# Blackbox Exporter configuration for AutoGen Code Review Bot
+# Defines health check probes for various endpoints
+
+modules:
+  # HTTP health check for main application
+  http_2xx:
+    prober: http
+    timeout: 10s
+    http:
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      valid_status_codes: [200]
+      method: GET
+      headers:
+        User-Agent: "Blackbox-Exporter-Health-Check"
+      no_follow_redirects: false
+      preferred_ip_protocol: "ip4"
+      ip_protocol_fallback: false
+
+  # HTTP health check for metrics endpoint
+  http_metrics:
+    prober: http
+    timeout: 10s
+    http:
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      valid_status_codes: [200]
+      method: GET
+      headers:
+        User-Agent: "Blackbox-Exporter-Metrics-Check"
+        Accept: "text/plain"
+      no_follow_redirects: false
+      preferred_ip_protocol: "ip4"
+
+  # HTTP POST check for webhook endpoint
+  http_webhook:
+    prober: http
+    timeout: 15s
+    http:
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      valid_status_codes: [200, 202]
+      method: POST
+      headers:
+        Content-Type: "application/json"
+        User-Agent: "Blackbox-Exporter-Webhook-Check"
+        X-GitHub-Event: "ping"
+      body: '{"zen": "Health check from monitoring system"}'
+      no_follow_redirects: false
+      preferred_ip_protocol: "ip4"
+
+  # TCP connectivity check for Redis
+  tcp_connect:
+    prober: tcp
+    timeout: 10s
+    tcp:
+      preferred_ip_protocol: "ip4"
+      ip_protocol_fallback: false
+
+  # ICMP ping check
+  icmp_ping:
+    prober: icmp
+    timeout: 10s
+    icmp:
+      preferred_ip_protocol: "ip4"
+      source_ip_address: ""
+      payload_size: 64
+      dont_fragment: false
+
+  # DNS resolution check
+  dns_check:
+    prober: dns
+    timeout: 10s
+    dns:
+      preferred_ip_protocol: "ip4"
+      transport_protocol: "udp"
+      query_name: "api.github.com"
+      query_type: "A"
+      valid_rcodes: ["NOERROR"]
+      validate_answer_rrs:
+        fail_if_matches_regexp: []
+        fail_if_not_matches_regexp: [".*"]
+
+  # GitHub API connectivity check
+  github_api_check:
+    prober: http
+    timeout: 30s
+    http:
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      valid_status_codes: [200, 401, 403]  # 401/403 expected without auth
+      method: GET
+      headers:
+        User-Agent: "AutoGen-Bot-Health-Check"
+        Accept: "application/vnd.github+json"
+      no_follow_redirects: false
+      preferred_ip_protocol: "ip4"
+      ip_protocol_fallback: false
+
+  # OpenAI API connectivity check
+  openai_api_check:
+    prober: http
+    timeout: 30s
+    http:
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      valid_status_codes: [200, 401]  # 401 expected without auth
+      method: GET
+      headers:
+        User-Agent: "AutoGen-Bot-Health-Check"
+        Accept: "application/json"
+      no_follow_redirects: false
+      preferred_ip_protocol: "ip4"
