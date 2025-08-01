@@ -1,0 +1,387 @@
+# Dependency Update Workflow Template for AutoGen Code Review Bot
+# Copy this file to .github/workflows/dependency-update.yml to enable
+
+name: Dependency Updates
+
+on:
+  schedule:
+    # Run every Monday at 9 AM UTC
+    - cron: '0 9 * * 1'
+  workflow_dispatch:
+    inputs:
+      update_type:
+        description: 'Type of update to perform'
+        required: true
+        default: 'minor'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+          - all
+      force_update:
+        description: 'Force update even if tests fail'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  PYTHON_VERSION: '3.11'
+  BRANCH_NAME: 'automated/dependency-updates'
+
+jobs:
+  # Check for dependency updates
+  check-updates:
+    name: Check for Updates
+    runs-on: ubuntu-latest
+    
+    outputs:
+      has-updates: ${{ steps.check.outputs.has-updates }}
+      update-summary: ${{ steps.check.outputs.summary }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install update tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install pip-tools pip-review pur
+      
+      - name: Check for Python package updates
+        id: check
+        run: |
+          echo "🔍 Checking for dependency updates..."
+          
+          # Check for updates
+          pip-review --local --interactive=false > update_report.txt || true
+          
+          if [ -s update_report.txt ]; then
+            echo "has-updates=true" >> $GITHUB_OUTPUT
+            echo "Found dependency updates:"
+            cat update_report.txt
+            
+            # Create summary
+            summary=$(cat update_report.txt | head -10)
+            echo "summary<<EOF" >> $GITHUB_OUTPUT
+            echo "$summary" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          else
+            echo "has-updates=false" >> $GITHUB_OUTPUT
+            echo "summary=No updates available" >> $GITHUB_OUTPUT
+            echo "✅ All dependencies are up to date"
+          fi
+      
+      - name: Upload update report
+        uses: actions/upload-artifact@v4
+        if: steps.check.outputs.has-updates == 'true'
+        with:
+          name: update-report
+          path: update_report.txt
+          retention-days: 7
+
+  # Create dependency update branch
+  create-update-branch:
+    name: Create Update Branch
+    runs-on: ubuntu-latest
+    needs: check-updates
+    if: needs.check-updates.outputs.has-updates == 'true'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+      
+      - name: Create update branch
+        run: |
+          # Delete existing branch if it exists
+          git push origin --delete ${{ env.BRANCH_NAME }} || true
+          git branch -D ${{ env.BRANCH_NAME }} || true
+          
+          # Create new branch
+          git checkout -b ${{ env.BRANCH_NAME }}
+          echo "✅ Created branch: ${{ env.BRANCH_NAME }}"
+
+  # Update Python dependencies
+  update-python-dependencies:
+    name: Update Python Dependencies
+    runs-on: ubuntu-latest
+    needs: [check-updates, create-update-branch]
+    if: needs.check-updates.outputs.has-updates == 'true'
+    
+    steps:
+      - name: Checkout update branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BRANCH_NAME }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install current dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
+      
+      - name: Update dependencies based on type
+        run: |
+          update_type="${{ github.event.inputs.update_type || 'minor' }}"
+          
+          echo "🔄 Updating dependencies (type: $update_type)"
+          
+          case $update_type in
+            "patch")
+              # Update only patch versions
+              pip-review --local --auto --patch-only
+              ;;
+            "minor")
+              # Update minor and patch versions
+              pip-review --local --auto --minor-only
+              ;;
+            "major")
+              # Update only major versions (be careful!)
+              pip-review --local --interactive=false > major_updates.txt
+              echo "⚠️ Major updates require manual review:"
+              cat major_updates.txt
+              ;;
+            "all")
+              # Update all dependencies
+              pip-review --local --auto
+              ;;
+          esac
+      
+      - name: Update pyproject.toml
+        run: |
+          echo "📝 Updating pyproject.toml with new versions"
+          
+          # Generate updated requirements
+          pip freeze > updated_requirements.txt
+          
+          # Use pur to update pyproject.toml
+          pur -r pyproject.toml --force
+      
+      - name: Install updated dependencies
+        run: |
+          pip install -e .[dev]
+          echo "✅ Updated dependencies installed"
+      
+      - name: Generate dependency report
+        run: |
+          echo "📊 Generating dependency report"
+          
+          pip list --format=json > dependencies_after.json
+          pip freeze > requirements_after.txt
+          
+          # Create update summary
+          echo "# Dependency Update Summary" > DEPENDENCY_UPDATE_SUMMARY.md
+          echo "" >> DEPENDENCY_UPDATE_SUMMARY.md
+          echo "## Updated Packages" >> DEPENDENCY_UPDATE_SUMMARY.md
+          echo "" >> DEPENDENCY_UPDATE_SUMMARY.md
+          
+          # Add package diff if available
+          if [ -f update_report.txt ]; then
+            cat update_report.txt >> DEPENDENCY_UPDATE_SUMMARY.md
+          fi
+          
+          echo "" >> DEPENDENCY_UPDATE_SUMMARY.md
+          echo "## Full Package List" >> DEPENDENCY_UPDATE_SUMMARY.md
+          echo "" >> DEPENDENCY_UPDATE_SUMMARY.md
+          echo '```' >> DEPENDENCY_UPDATE_SUMMARY.md
+          pip list >> DEPENDENCY_UPDATE_SUMMARY.md
+          echo '```' >> DEPENDENCY_UPDATE_SUMMARY.md
+      
+      - name: Commit dependency updates
+        run: |
+          git add .
+          
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          
+          git commit -m "chore(deps): update Python dependencies
+          
+          - Update type: ${{ github.event.inputs.update_type || 'minor' }}
+          - Updated dependencies automatically
+          - Generated by GitHub Actions
+          
+          ${{ needs.check-updates.outputs.update-summary }}"
+          
+          echo "✅ Committed dependency updates"
+
+  # Run tests with updated dependencies
+  test-updated-dependencies:
+    name: Test Updated Dependencies
+    runs-on: ubuntu-latest
+    needs: update-python-dependencies
+    
+    strategy:
+      matrix:
+        python-version: ['3.8', '3.9', '3.10', '3.11']
+    
+    steps:
+      - name: Checkout update branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BRANCH_NAME }}
+      
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+      
+      - name: Install updated dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
+      
+      - name: Run tests
+        run: |
+          pytest tests/ -v --cov=src --cov-fail-under=90
+          echo "✅ Tests passed with updated dependencies"
+      
+      - name: Run security scan
+        run: |
+          bandit -r src/ -f json -o security-scan.json || true
+          safety check || true
+          echo "✅ Security scan completed"
+
+  # Create pull request
+  create-pull-request:
+    name: Create Pull Request
+    runs-on: ubuntu-latest
+    needs: [check-updates, update-python-dependencies, test-updated-dependencies]
+    if: always() && needs.check-updates.outputs.has-updates == 'true'
+    
+    steps:
+      - name: Checkout update branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BRANCH_NAME }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Push update branch
+        run: |
+          git push origin ${{ env.BRANCH_NAME }} --force
+          echo "✅ Pushed update branch"
+      
+      - name: Create or update pull request
+        run: |
+          # Check if PR already exists
+          pr_number=$(gh pr list --state open --head ${{ env.BRANCH_NAME }} --json number --jq '.[0].number' || echo "")
+          
+          if [ -n "$pr_number" ]; then
+            echo "🔄 Updating existing PR #$pr_number"
+            gh pr edit $pr_number --body-file DEPENDENCY_UPDATE_SUMMARY.md
+          else
+            echo "🆕 Creating new pull request"
+            
+            # Determine if tests passed
+            test_status="${{ needs.test-updated-dependencies.result }}"
+            if [ "$test_status" = "success" ]; then
+              test_badge="✅ Tests passing"
+            else
+              test_badge="❌ Tests failing"
+              if [ "${{ github.event.inputs.force_update }}" != "true" ]; then
+                echo "Tests failed and force_update is false, marking PR as draft"
+                draft_flag="--draft"
+              fi
+            fi
+            
+            gh pr create \
+              --title "chore(deps): automated dependency updates" \
+              --body "$(cat DEPENDENCY_UPDATE_SUMMARY.md)
+
+## Test Results
+$test_badge
+
+## Review Notes
+- This PR was automatically generated by the dependency update workflow
+- Please review the changes and test the application before merging
+- Security scan results are available in the workflow artifacts
+
+## Merge Instructions
+- ✅ Review dependency changes
+- ✅ Run additional tests if needed
+- ✅ Check for breaking changes
+- ✅ Merge when ready
+
+---
+🤖 Generated by GitHub Actions" \
+              --head ${{ env.BRANCH_NAME }} \
+              --base main \
+              --label "dependencies,automated" \
+              $draft_flag || echo "Failed to create PR"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Cleanup if no updates
+  cleanup-no-updates:
+    name: Cleanup (No Updates)
+    runs-on: ubuntu-latest
+    needs: check-updates
+    if: needs.check-updates.outputs.has-updates == 'false'
+    
+    steps:
+      - name: Close existing PR if no updates
+        run: |
+          echo "🧹 No updates available, checking for existing PR to close"
+          
+          # Check if there's an open PR for dependency updates
+          pr_number=$(gh pr list --state open --head ${{ env.BRANCH_NAME }} --json number --jq '.[0].number' || echo "")
+          
+          if [ -n "$pr_number" ]; then
+            echo "Closing outdated dependency update PR #$pr_number"
+            gh pr close $pr_number --comment "Closing as no dependency updates are currently available."
+            
+            # Delete the branch
+            git push origin --delete ${{ env.BRANCH_NAME }} || true
+          else
+            echo "No existing dependency update PR found"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Summary
+  summary:
+    name: Update Summary
+    runs-on: ubuntu-latest
+    needs: [check-updates, create-pull-request, cleanup-no-updates]
+    if: always()
+    
+    steps:
+      - name: Generate summary
+        run: |
+          echo "# 📊 Dependency Update Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ needs.check-updates.outputs.has-updates }}" = "true" ]; then
+            echo "## ✅ Updates Available" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "${{ needs.check-updates.outputs.update-summary }}" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "A pull request has been created with the dependency updates." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## ✅ No Updates Needed" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "All dependencies are up to date." >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Update Type:** ${{ github.event.inputs.update_type || 'minor' }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Force Update:** ${{ github.event.inputs.force_update || 'false' }}" >> $GITHUB_STEP_SUMMARY
