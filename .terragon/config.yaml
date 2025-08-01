@@ -1,0 +1,123 @@
+# Terragon Autonomous SDLC Configuration
+# Perpetual Value Discovery for Advanced Repositories
+
+metadata:
+  repository: "autogen-code-review-bot"
+  maturity_level: "advanced"
+  classification: "enterprise-ready"
+  last_assessment: "2025-08-01T00:00:00Z"
+  
+value_discovery:
+  # Continuous discovery configuration
+  scheduling:
+    immediate_on_merge: true
+    hourly_security_scan: true
+    daily_analysis: true
+    weekly_deep_review: true
+    monthly_strategic_review: true
+  
+  # Multi-source signal harvesting
+  sources:
+    git_history: 
+      enabled: true
+      keywords: ["TODO", "FIXME", "HACK", "DEPRECATED", "XXX"]
+      commit_patterns: ["quick fix", "temporary", "hack", "workaround"]
+    
+    static_analysis:
+      enabled: true
+      tools: ["ruff", "bandit", "mypy", "sonarqube"]
+      complexity_threshold: 10
+      debt_markers: true
+    
+    security_scanning:
+      enabled: true
+      tools: ["snyk", "safety", "dependabot", "codeql"]
+      vulnerability_databases: ["NVD", "OSV", "GitHub Advisory"]
+    
+    performance_monitoring:
+      enabled: true
+      regression_threshold: 0.05  # 5% performance degradation
+      benchmark_comparison: true
+    
+    external_integrations:
+      github_issues: true
+      pr_reviews: true
+      support_tickets: false  # Not configured
+      customer_feedback: false  # Not configured
+
+scoring:
+  # Adaptive weights based on repository maturity
+  weights:
+    advanced:
+      wsjf: 0.5      # Weighted Shortest Job First
+      ice: 0.1       # Impact Confidence Ease  
+      technical_debt: 0.3
+      security: 0.1
+  
+  # Multipliers and boosts
+  multipliers:
+    security_vulnerability: 2.0
+    compliance_blocking: 1.8
+    dependency_updates: 0.8
+    documentation_only: 0.6
+    performance_critical: 1.5
+    
+  thresholds:
+    minimum_score: 15.0
+    maximum_risk: 0.8
+    execution_confidence: 0.7
+
+execution:
+  # Autonomous execution parameters
+  constraints:
+    max_concurrent_tasks: 1
+    max_execution_time_hours: 2
+    require_tests_pass: true
+    require_lint_pass: true
+    
+  validation:
+    test_coverage_threshold: 95
+    performance_regression_limit: 0.05
+    security_scan_required: true
+    
+  rollback_triggers:
+    - test_failure
+    - build_failure  
+    - security_violation
+    - performance_regression
+    - manual_intervention_requested
+
+learning:
+  # Continuous learning configuration
+  feedback_collection:
+    track_estimation_accuracy: true
+    track_value_delivery: true
+    track_execution_outcomes: true
+    
+  model_updates:
+    confidence_adjustment: true
+    effort_recalibration: true
+    pattern_recognition: true
+    
+  metrics_retention:
+    execution_history_months: 12
+    performance_data_months: 6
+    learning_data_months: 24
+
+# Repository-specific patterns (learned from analysis)
+repository_patterns:
+  primary_language: "python"
+  architecture: "dual-agent-microservice"
+  deployment: "containerized"
+  
+  common_issues:
+    - "dependency updates"
+    - "test coverage gaps"
+    - "performance optimizations"
+    - "documentation updates"
+    
+  value_drivers:
+    - "security_improvements"
+    - "performance_gains"
+    - "technical_debt_reduction" 
+    - "automation_enhancements"
