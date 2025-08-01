@@ -36,6 +36,9 @@ packages = [
 [project.scripts]
 bot = "autogen_code_review_bot.cli:main"
 webhook = "autogen_code_review_bot.webhook:main"
+review-pr = "autogen_code_review_bot.cli:review_pr"
+setup-webhook = "autogen_code_review_bot.webhook:setup"
+analyze-local = "autogen_code_review_bot.cli:analyze_local"
 
 [tool.ruff]
 target-version = "py38"

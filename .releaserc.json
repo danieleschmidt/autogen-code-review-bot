@@ -1,0 +1,101 @@
+{
+  "branches": [
+    "main",
+    {
+      "name": "beta",
+      "prerelease": true
+    },
+    {
+      "name": "alpha",
+      "prerelease": true
+    }
+  ],
+  "plugins": [
+    "@semantic-release/commit-analyzer",
+    "@semantic-release/release-notes-generator",
+    [
+      "@semantic-release/changelog",
+      {
+        "changelogFile": "CHANGELOG.md"
+      }
+    ],
+    [
+      "@semantic-release/exec",
+      {
+        "prepareCmd": "python -c \"import tomllib, tomllib; content = open('pyproject.toml').read(); content = content.replace('version = \\\"${lastRelease.version}\\\"', 'version = \\\"${nextRelease.version}\\\"'); open('pyproject.toml', 'w').write(content)\""
+      }
+    ],
+    [
+      "@semantic-release/git",
+      {
+        "assets": [
+          "CHANGELOG.md",
+          "pyproject.toml"
+        ],
+        "message": "chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
+      }
+    ],
+    [
+      "@semantic-release/github",
+      {
+        "assets": [
+          {
+            "path": "dist/*.tar.gz",
+            "label": "Source distribution"
+          },
+          {
+            "path": "dist/*.whl",
+            "label": "Python wheel"
+          },
+          {
+            "path": "security/sbom-*.json",
+            "label": "Software Bill of Materials"
+          }
+        ]
+      }
+    ]
+  ],
+  "preset": "conventionalcommits",
+  "releaseRules": [
+    {
+      "type": "feat",
+      "release": "minor"
+    },
+    {
+      "type": "fix",
+      "release": "patch"
+    },
+    {
+      "type": "perf",
+      "release": "patch"
+    },
+    {
+      "type": "revert",
+      "release": "patch"
+    },
+    {
+      "type": "docs",
+      "scope": "README",
+      "release": "patch"
+    },
+    {
+      "type": "refactor",
+      "release": "patch"
+    },
+    {
+      "scope": "no-release",
+      "release": false
+    },
+    {
+      "type": "build",
+      "scope": "deps",
+      "release": "patch"
+    }
+  ],
+  "parserOpts": {
+    "noteKeywords": [
+      "BREAKING CHANGE",
+      "BREAKING CHANGES"
+    ]
+  }
+}

@@ -1,0 +1,325 @@
+# CD (Continuous Deployment) Workflow Template for AutoGen Code Review Bot
+# Copy this file to .github/workflows/cd.yml to enable
+
+name: Continuous Deployment
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+      force_deploy:
+        description: 'Force deployment (skip safety checks)'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  # Build and publish Docker images
+  build-and-publish:
+    name: Build & Publish Images
+    runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_dispatch' || github.event.inputs.environment != 'production'
+    
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    
+    outputs:
+      image-digest: ${{ steps.build.outputs.digest }}
+      image-tag: ${{ steps.meta.outputs.tags }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha,prefix={{branch}}-
+      
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            PYTHON_VERSION=${{ env.PYTHON_VERSION }}
+          platforms: linux/amd64,linux/arm64
+      
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
+          format: 'spdx-json'
+          output-file: 'sbom.spdx.json'
+      
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.spdx.json
+          retention-days: 90
+      
+      - name: Sign container image
+        if: github.event_name != 'pull_request'
+        run: |
+          echo "Signing container image would happen here"
+          echo "Image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}"
+
+  # Security scanning
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: build-and-publish
+    if: always() && needs.build-and-publish.result == 'success'
+    
+    steps:
+      - name: Scan image for vulnerabilities
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ needs.build-and-publish.outputs.image-digest }}
+          format: 'sarif'
+          output: 'security-scan.sarif'
+      
+      - name: Upload security scan results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'security-scan.sarif'
+      
+      - name: Check for critical vulnerabilities
+        run: |
+          if grep -q '"level": "error"' security-scan.sarif; then
+            echo "❌ Critical vulnerabilities found!"
+            exit 1
+          else
+            echo "✅ No critical vulnerabilities found"
+          fi
+
+  # Deploy to staging
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [build-and-publish, security-scan]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: staging
+    
+    steps:
+      - name: Checkout deployment configs
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            deployment/
+            docker-compose.yml
+      
+      - name: Deploy to staging
+        run: |
+          echo "🚀 Deploying to staging environment"
+          echo "Image: ${{ needs.build-and-publish.outputs.image-tag }}"
+          
+          # Simulate deployment commands
+          echo "docker-compose -f docker-compose.staging.yml pull"
+          echo "docker-compose -f docker-compose.staging.yml up -d"
+          echo "✅ Deployment to staging completed"
+      
+      - name: Run smoke tests
+        run: |
+          echo "🧪 Running smoke tests against staging"
+          # Add your smoke test commands here
+          curl -f http://staging.example.com/health || exit 1
+          echo "✅ Smoke tests passed"
+      
+      - name: Notify deployment
+        if: always()
+        run: |
+          echo "📢 Staging deployment notification sent"
+          # Add notification logic (Slack, Teams, etc.)
+
+  # Deploy to production
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [build-and-publish, security-scan, deploy-staging]
+    if: |
+      (github.event_name == 'release' && github.event.action == 'published') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production')
+    environment: production
+    
+    steps:
+      - name: Checkout deployment configs
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            deployment/
+            docker-compose.yml
+      
+      - name: Pre-deployment checks
+        if: github.event.inputs.force_deploy != 'true'
+        run: |
+          echo "🔍 Running pre-deployment safety checks"
+          
+          # Check if staging is healthy
+          curl -f http://staging.example.com/health || exit 1
+          
+          # Check for ongoing incidents
+          # Add your incident check logic here
+          
+          echo "✅ Pre-deployment checks passed"
+      
+      - name: Create deployment
+        run: |
+          echo "🚀 Deploying to production environment"
+          echo "Image: ${{ needs.build-and-publish.outputs.image-tag }}"
+          
+          # Blue-green deployment simulation
+          echo "Step 1: Deploy to green environment"
+          echo "docker-compose -f docker-compose.prod-green.yml pull"
+          echo "docker-compose -f docker-compose.prod-green.yml up -d"
+          
+          echo "Step 2: Health check green environment"
+          # Add health check commands
+          
+          echo "Step 3: Switch traffic to green"
+          # Add traffic switching logic
+          
+          echo "Step 4: Shutdown blue environment"
+          # Add blue environment shutdown
+          
+          echo "✅ Production deployment completed"
+      
+      - name: Run production tests
+        run: |
+          echo "🧪 Running production health checks"
+          curl -f https://api.example.com/health || exit 1
+          
+          # Add comprehensive health checks
+          echo "✅ Production health checks passed"
+      
+      - name: Create rollback point
+        run: |
+          echo "📝 Creating rollback point"
+          echo "Previous image: $(docker images --format 'table {{.Repository}}:{{.Tag}}' | head -2 | tail -1)"
+          # Store rollback information
+      
+      - name: Update status page
+        run: |
+          echo "📊 Updating status page with deployment info"
+          # Add status page update logic
+      
+      - name: Notify production deployment
+        if: always()
+        run: |
+          if [[ "${{ job.status }}" == "success" ]]; then
+            echo "✅ Production deployment successful - notifying team"
+          else
+            echo "❌ Production deployment failed - alerting on-call"
+          fi
+          # Add notification logic
+
+  # Rollback capability
+  rollback:
+    name: Rollback Deployment
+    runs-on: ubuntu-latest
+    if: failure() && github.event_name != 'workflow_dispatch'
+    needs: [deploy-production]
+    environment: production
+    
+    steps:
+      - name: Emergency rollback
+        run: |
+          echo "🚨 Initiating emergency rollback"
+          
+          # Get previous stable version
+          # Rollback commands here
+          
+          echo "✅ Rollback completed"
+      
+      - name: Verify rollback
+        run: |
+          echo "🔍 Verifying rollback success"
+          curl -f https://api.example.com/health || exit 1
+          echo "✅ Rollback verification passed"
+      
+      - name: Alert team
+        run: |
+          echo "🚨 Emergency rollback executed - alerting team"
+          # Add emergency notification logic
+
+  # Cleanup old images
+  cleanup:
+    name: Cleanup Old Images
+    runs-on: ubuntu-latest
+    needs: [deploy-production]
+    if: always() && github.event_name == 'release'
+    
+    steps:
+      - name: Clean up old container images
+        run: |
+          echo "🧹 Cleaning up old container images"
+          # Add cleanup logic to remove old images from registry
+          echo "✅ Cleanup completed"
+
+  # Post-deployment monitoring
+  post-deployment:
+    name: Post-Deployment Monitoring
+    runs-on: ubuntu-latest
+    needs: [deploy-production]
+    if: success()
+    
+    steps:
+      - name: Setup monitoring alerts
+        run: |
+          echo "📊 Setting up post-deployment monitoring"
+          # Add monitoring setup logic
+          echo "✅ Monitoring alerts configured"
+      
+      - name: Schedule performance tests
+        run: |
+          echo "⏰ Scheduling performance tests for 30 minutes"
+          # Add scheduled test logic
+          echo "✅ Performance tests scheduled"

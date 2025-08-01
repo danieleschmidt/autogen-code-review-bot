@@ -1,4 +1,4 @@
-## Summary
+## Description
 Brief description of the changes in this PR.
 
 ## Type of Change
@@ -8,70 +8,24 @@ Brief description of the changes in this PR.
 - [ ] Documentation update
 - [ ] Refactoring (no functional changes)
 - [ ] Performance improvement
-- [ ] Security enhancement
+- [ ] Test coverage improvement
 
 ## Related Issues
 Closes #(issue number)
 
 ## Changes Made
-### Core Changes
-- 
-- 
-- 
-
-### Agent-Specific Changes (if applicable)
-- **Coder Agent**: 
-- **Reviewer Agent**: 
-
-### Configuration Changes
-- [ ] Updated pyproject.toml
-- [ ] Modified CI/CD workflows
-- [ ] Changed configuration files
-- [ ] Updated dependencies
+- Change 1
+- Change 2
+- Change 3
 
 ## Testing
-### Test Coverage
-- [ ] Unit tests added/updated
-- [ ] Integration tests added/updated
-- [ ] Performance tests added/updated
-- [ ] All tests pass locally
+- [ ] Unit tests pass
+- [ ] Integration tests pass
+- [ ] Manual testing completed
+- [ ] Performance impact assessed
 
-### Manual Testing
-Describe the manual testing performed:
-- 
-- 
-
-### Agent Testing (if applicable)
-- [ ] Tested with sample PR reviews
-- [ ] Verified agent conversation flows
-- [ ] Checked performance impact
-
-## Documentation
-- [ ] Updated README.md
-- [ ] Updated API documentation
-- [ ] Added/updated docstrings
-- [ ] Updated configuration examples
-
-## Security Checklist
-- [ ] No secrets or credentials exposed
-- [ ] Input validation added where needed
-- [ ] Security scan passed (bandit)
-- [ ] Dependencies security checked
-- [ ] No path traversal vulnerabilities
-
-## Performance Impact
-- [ ] No significant performance regression
-- [ ] Benchmarks run (if applicable)
-- [ ] Memory usage considered
-- [ ] Caching strategy evaluated
-
-## Deployment Notes
-Any special deployment considerations:
-- 
-- 
-
-## Screenshots/Demos (if applicable)
-Add screenshots or demo links here.
+## Screenshots (if applicable)
+Add screenshots to help explain your changes.
 
 ## Checklist
 - [ ] My code follows the project's style guidelines
@@ -82,3 +36,13 @@ Add screenshots or demo links here.
 - [ ] I have added tests that prove my fix is effective or that my feature works
 - [ ] New and existing unit tests pass locally with my changes
 - [ ] Any dependent changes have been merged and published
+
+## Security Considerations
+- [ ] No sensitive information exposed
+- [ ] Security best practices followed
+- [ ] Input validation implemented where needed
+- [ ] Authentication/authorization changes reviewed
+
+## Breaking Changes
+List any breaking changes and migration steps if applicable.
+EOF < /dev/null

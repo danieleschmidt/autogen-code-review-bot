@@ -1,0 +1,152 @@
+# OpenTelemetry Collector configuration for AutoGen Code Review Bot
+# Handles traces, metrics, and logs collection and export
+
+receivers:
+  # OTLP receiver for traces and metrics
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+  # Prometheus receiver for metrics scraping
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: 'autogen-bot'
+          static_configs:
+            - targets: ['autogen-bot:8080']
+          metrics_path: '/metrics'
+          scrape_interval: 30s
+
+  # Jaeger receiver for legacy Jaeger traces
+  jaeger:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:14250
+      thrift_http:
+        endpoint: 0.0.0.0:14268
+      thrift_compact:
+        endpoint: 0.0.0.0:6831
+      thrift_binary:
+        endpoint: 0.0.0.0:6832
+
+  # Zipkin receiver for Zipkin traces
+  zipkin:
+    endpoint: 0.0.0.0:9411
+
+processors:
+  # Batch processor for efficient export
+  batch:
+    timeout: 10s
+    send_batch_size: 1024
+    send_batch_max_size: 2048
+
+  # Memory limiter to prevent OOM
+  memory_limiter:
+    limit_mib: 256
+    spike_limit_mib: 64
+
+  # Resource processor to add common attributes
+  resource:
+    attributes:
+      - key: service.name
+        value: autogen-code-review-bot
+        action: upsert
+      - key: service.version
+        value: "${env:SERVICE_VERSION}"
+        action: upsert
+      - key: deployment.environment
+        value: "${env:ENVIRONMENT}"
+        action: upsert
+
+  # Attributes processor for trace enhancement
+  attributes:
+    actions:
+      - key: http.user_agent
+        action: delete
+      - key: http.request.header.authorization
+        action: delete
+      - key: http.request.header.x-github-token
+        action: delete
+
+  # Probabilistic sampler for traces
+  probabilistic_sampler:
+    sampling_percentage: 10  # Sample 10% of traces
+
+exporters:
+  # Jaeger exporter
+  jaeger:
+    endpoint: jaeger:14250
+    tls:
+      insecure: true
+
+  # Zipkin exporter
+  zipkin:
+    endpoint: "http://zipkin:9411/api/v2/spans"
+
+  # Prometheus exporter for metrics
+  prometheus:
+    endpoint: "0.0.0.0:8889"
+    namespace: autogen_bot
+    const_labels:
+      service: autogen-code-review-bot
+
+  # Logging exporter for debugging
+  logging:
+    loglevel: info
+    sampling_initial: 5
+    sampling_thereafter: 200
+
+  # OTLP exporter for forwarding to other systems
+  otlp:
+    endpoint: "${env:OTLP_EXPORTER_ENDPOINT}"
+    tls:
+      insecure: true
+    headers:
+      api-key: "${env:OTLP_EXPORTER_API_KEY}"
+
+service:
+  # Telemetry configuration
+  telemetry:
+    logs:
+      level: info
+    metrics:
+      address: 0.0.0.0:8888
+
+  # Extensions
+  extensions: [health_check, pprof, zpages]
+
+  # Pipeline configuration
+  pipelines:
+    # Traces pipeline
+    traces:
+      receivers: [otlp, jaeger, zipkin]
+      processors: [memory_limiter, resource, attributes, probabilistic_sampler, batch]
+      exporters: [jaeger, zipkin, logging]
+
+    # Metrics pipeline
+    metrics:
+      receivers: [otlp, prometheus]
+      processors: [memory_limiter, resource, batch]
+      exporters: [prometheus, logging]
+
+    # Logs pipeline
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, batch]
+      exporters: [logging]
+
+extensions:
+  # Health check extension
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+  # Performance profiler
+  pprof:
+    endpoint: 0.0.0.0:1777
+
+  # Z-Pages for debugging
+  zpages:
+    endpoint: 0.0.0.0:55679
