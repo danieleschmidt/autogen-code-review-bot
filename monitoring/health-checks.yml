@@ -1,0 +1,66 @@
+# Health check configuration for AutoGen Code Review Bot
+# Defines comprehensive health monitoring endpoints and checks
+
+version: '3.8'
+
+services:
+  # Health check service - monitors all components
+  healthcheck:
+    image: prom/blackbox-exporter:latest
+    container_name: autogen-healthcheck
+    restart: unless-stopped
+    
+    ports:
+      - "9115:9115"
+    
+    volumes:
+      - ./blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+    
+    networks:
+      - autogen-network
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 128M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+
+  # Uptime monitoring service
+  uptime-kuma:
+    image: louislam/uptime-kuma:latest
+    container_name: autogen-uptime
+    restart: unless-stopped
+    
+    ports:
+      - "3001:3001"
+    
+    volumes:
+      - uptime_data:/app/data:rw
+    
+    networks:
+      - autogen-network
+    
+    environment:
+      - UPTIME_KUMA_DISABLE_FRAME_SAMEORIGIN=1
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+
+networks:
+  autogen-network:
+    external: true
+
+volumes:
+  uptime_data:
+    driver: local

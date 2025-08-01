@@ -1,0 +1,61 @@
+# Development Dockerfile for AutoGen Code Review Bot
+# Includes development tools and hot-reloading
+
+ARG PYTHON_VERSION=3.11
+FROM python:${PYTHON_VERSION}-slim
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    git \
+    curl \
+    wget \
+    vim \
+    less \
+    procps \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create development user
+RUN groupadd --gid 1000 developer && \
+    useradd --uid 1000 --gid developer --shell /bin/bash --create-home developer
+
+# Set working directory
+WORKDIR /app
+
+# Install Python dependencies
+COPY pyproject.toml setup.py ./
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -e .[dev,monitoring]
+
+# Install additional development tools
+RUN pip install --no-cache-dir \
+    watchdog \
+    ipython \
+    jupyter \
+    memory_profiler \
+    line_profiler
+
+# Copy source code
+COPY --chown=developer:developer . .
+
+# Switch to development user
+USER developer
+
+# Environment variables for development
+ENV PYTHONPATH=/app \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    DEBUG=true \
+    LOG_LEVEL=DEBUG \
+    DEVELOPMENT=true
+
+# Expose ports for development
+EXPOSE 8080 8888 5000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python -c "import autogen_code_review_bot; print('OK')" || exit 1
+
+# Default command for development (with file watching)
+CMD ["python", "bot.py", "--config", "agent_config.yaml", "--reload"]
+EOF < /dev/null

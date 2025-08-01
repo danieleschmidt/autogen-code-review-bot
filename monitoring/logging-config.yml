@@ -1,0 +1,193 @@
+# Centralized logging configuration for AutoGen Code Review Bot
+# ELK Stack (Elasticsearch, Logstash, Kibana) setup
+
+version: '3.8'
+
+services:
+  # Elasticsearch for log storage
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: autogen-elasticsearch
+    restart: unless-stopped
+    
+    environment:
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - xpack.security.enabled=false
+      - xpack.security.http.ssl.enabled=false
+      - xpack.security.transport.ssl.enabled=false
+    
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data:rw
+      - ./elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro
+    
+    networks:
+      - autogen-network
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    
+    # Health check
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Logstash for log processing
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.11.0
+    container_name: autogen-logstash
+    restart: unless-stopped
+    
+    ports:
+      - "5044:5044"
+      - "5000:5000/tcp"
+      - "5000:5000/udp"
+      - "9600:9600"
+    
+    volumes:
+      - ./logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro
+      - ./logstash.yml:/usr/share/logstash/config/logstash.yml:ro
+    
+    networks:
+      - autogen-network
+    
+    depends_on:
+      - elasticsearch
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    
+    environment:
+      - "LS_JAVA_OPTS=-Xms256m -Xmx256m"
+
+  # Kibana for log visualization
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.11.0
+    container_name: autogen-kibana
+    restart: unless-stopped
+    
+    ports:
+      - "5601:5601"
+    
+    volumes:
+      - ./kibana.yml:/usr/share/kibana/config/kibana.yml:ro
+    
+    networks:
+      - autogen-network
+    
+    depends_on:
+      - elasticsearch
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.2'
+          memory: 256M
+    
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - SERVER_NAME=autogen-kibana
+    
+    # Health check
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5601/api/status || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Filebeat for log shipping (alternative to direct logging)
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:8.11.0
+    container_name: autogen-filebeat
+    restart: unless-stopped
+    
+    user: root
+    
+    volumes:
+      - ./filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - filebeat_data:/usr/share/filebeat/data:rw
+    
+    networks:
+      - autogen-network
+    
+    depends_on:
+      - elasticsearch
+      - logstash
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+
+  # Fluentd for log aggregation (alternative to Logstash)
+  fluentd:
+    image: fluent/fluentd:v1.16-debian-1
+    container_name: autogen-fluentd
+    restart: unless-stopped
+    
+    ports:
+      - "24224:24224"
+      - "24224:24224/udp"
+    
+    volumes:
+      - ./fluentd.conf:/fluentd/etc/fluent.conf:ro
+      - fluentd_data:/fluentd/log:rw
+    
+    networks:
+      - autogen-network
+    
+    depends_on:
+      - elasticsearch
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+
+networks:
+  autogen-network:
+    external: true
+
+volumes:
+  elasticsearch_data:
+    driver: local
+  filebeat_data:
+    driver: local
+  fluentd_data:
+    driver: local
