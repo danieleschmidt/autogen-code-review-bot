@@ -1,0 +1,113 @@
+# Distributed tracing configuration for AutoGen Code Review Bot
+# Jaeger setup for request tracing and performance monitoring
+
+version: '3.8'
+
+services:
+  # Jaeger all-in-one (for development/small deployments)
+  jaeger:
+    image: jaegertracing/all-in-one:1.51
+    container_name: autogen-jaeger
+    restart: unless-stopped
+    
+    ports:
+      - "16686:16686"  # Jaeger UI
+      - "14268:14268"  # HTTP collector
+      - "14250:14250"  # gRPC collector
+      - "6831:6831/udp"  # UDP collector (compact thrift)
+      - "6832:6832/udp"  # UDP collector (binary thrift)
+      - "5778:5778"   # Config server
+    
+    networks:
+      - autogen-network
+    
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+      - COLLECTOR_ZIPKIN_HOST_PORT=:9411
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.2'
+          memory: 256M
+    
+    # Health check
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:16686/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # OpenTelemetry Collector (for production setups)
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.89.0
+    container_name: autogen-otel-collector
+    restart: unless-stopped
+    
+    ports:
+      - "4317:4317"   # OTLP gRPC receiver
+      - "4318:4318"   # OTLP HTTP receiver
+      - "8889:8889"   # Prometheus metrics
+      - "13133:13133" # Health check
+    
+    volumes:
+      - ./otel-collector-config.yml:/etc/otelcol-contrib/otel-collector-config.yml:ro
+    
+    networks:
+      - autogen-network
+    
+    depends_on:
+      - jaeger
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+    
+    command: ["--config=/etc/otelcol-contrib/otel-collector-config.yml"]
+
+  # Zipkin (alternative to Jaeger)
+  zipkin:
+    image: openzipkin/zipkin:2.24
+    container_name: autogen-zipkin
+    restart: unless-stopped
+    
+    ports:
+      - "9411:9411"
+    
+    networks:
+      - autogen-network
+    
+    environment:
+      - STORAGE_TYPE=mem
+      - JAVA_OPTS=-Xms128m -Xmx128m
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+    
+    # Health check
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:9411/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  autogen-network:
+    external: true
