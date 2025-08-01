@@ -1,1 +1,30 @@
-* @autogen-bot
+# Global owners
+* @owner
+
+# Python code
+*.py @python-team
+src/ @python-team
+
+# Documentation
+docs/ @docs-team
+*.md @docs-team
+
+# Configuration files
+*.yml @devops-team
+*.yaml @devops-team
+Dockerfile @devops-team
+docker-compose.yml @devops-team
+
+# Security sensitive files
+SECURITY.md @security-team
+.github/workflows/ @security-team
+
+# CI/CD
+.github/ @devops-team
+Makefile @devops-team
+
+# Dependencies
+requirements*.txt @python-team
+pyproject.toml @python-team
+setup.py @python-team
+EOF < /dev/null
