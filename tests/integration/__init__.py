@@ -1,0 +1,1 @@
+# Integration tests - component interaction tests
