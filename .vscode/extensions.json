@@ -1,0 +1,38 @@
+{
+  "recommendations": [
+    "ms-python.python",
+    "charliermarsh.ruff",
+    "ms-python.pylint",
+    "ms-python.black-formatter",
+    "ms-toolsai.jupyter",
+    "github.copilot",
+    "github.copilot-chat",
+    "ms-vscode.vscode-json",
+    "redhat.vscode-yaml",
+    "ms-vscode.makefile-tools",
+    "eamodio.gitlens",
+    "ms-vscode-remote.remote-containers",
+    "ms-vscode.test-adapter-converter",
+    "littlefoxteam.vscode-python-test-adapter",
+    "ms-azuretools.vscode-docker",
+    "github.vscode-pull-request-github",
+    "streetsidesoftware.code-spell-checker",
+    "ms-vscode.vscode-typescript-next",
+    "esbenp.prettier-vscode",
+    "bradlc.vscode-tailwindcss",
+    "ms-vscode.live-server",
+    "davidanson.vscode-markdownlint",
+    "yzhang.markdown-all-in-one",
+    "formulahendry.auto-rename-tag",
+    "christian-kohler.path-intellisense",
+    "gruntfuggly.todo-tree",
+    "ms-vscode.hexeditor",
+    "ryanluker.vscode-coverage-gutters",
+    "hbenl.vscode-test-explorer",
+    "alefragnani.project-manager"
+  ],
+  "unwantedRecommendations": [
+    "ms-python.flake8",
+    "ms-python.autopep8"
+  ]
+}
