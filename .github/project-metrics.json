@@ -1,0 +1,189 @@
+{
+  "version": "1.0.0",
+  "project": {
+    "name": "autogen-code-review-bot",
+    "repository": "danieleschmidt/autogen-code-review-bot",
+    "created": "2025-08-02",
+    "updated": "2025-08-02"
+  },
+  "metrics": {
+    "code_quality": {
+      "test_coverage": {
+        "target": 80,
+        "current": 0,
+        "unit": "percentage",
+        "measurement_method": "pytest-cov",
+        "trends": []
+      },
+      "code_complexity": {
+        "target": 10,
+        "current": 0,
+        "unit": "cyclomatic_complexity",
+        "measurement_method": "radon",
+        "trends": []
+      },
+      "maintainability_index": {
+        "target": 80,
+        "current": 0,
+        "unit": "score",
+        "measurement_method": "radon",
+        "trends": []
+      },
+      "technical_debt_ratio": {
+        "target": 5,
+        "current": 0,
+        "unit": "percentage",
+        "measurement_method": "sonarqube",
+        "trends": []
+      }
+    },
+    "security": {
+      "vulnerability_count": {
+        "critical": 0,
+        "high": 0,
+        "medium": 0,
+        "low": 0,
+        "last_scan": null,
+        "scanner": "bandit, safety, semgrep"
+      },
+      "dependency_vulnerabilities": {
+        "count": 0,
+        "last_scan": null,
+        "scanner": "safety, npm audit"
+      },
+      "secrets_detection": {
+        "violations": 0,
+        "last_scan": null,
+        "scanner": "detect-secrets, trufflehog"
+      }
+    },
+    "performance": {
+      "response_time": {
+        "p95": 0,
+        "p99": 0,
+        "unit": "milliseconds",
+        "measurement_method": "load_testing"
+      },
+      "memory_usage": {
+        "average": 0,
+        "peak": 0,
+        "unit": "MB",
+        "measurement_method": "monitoring"
+      },
+      "throughput": {
+        "requests_per_second": 0,
+        "unit": "rps",
+        "measurement_method": "load_testing"
+      }
+    },
+    "development": {
+      "commit_frequency": {
+        "daily_average": 0,
+        "weekly_total": 0,
+        "measurement_period": "30_days"
+      },
+      "pr_metrics": {
+        "average_review_time": 0,
+        "average_merge_time": 0,
+        "unit": "hours",
+        "measurement_period": "30_days"
+      },
+      "build_metrics": {
+        "success_rate": 100,
+        "average_duration": 0,
+        "unit": "percentage_and_minutes",
+        "measurement_period": "30_days"
+      },
+      "deployment_frequency": {
+        "per_week": 0,
+        "measurement_period": "30_days"
+      }
+    },
+    "reliability": {
+      "uptime": {
+        "target": 99.9,
+        "current": 0,
+        "unit": "percentage",
+        "measurement_period": "30_days"
+      },
+      "mttr": {
+        "target": 4,
+        "current": 0,
+        "unit": "hours",
+        "description": "Mean Time To Recovery"
+      },
+      "mtbf": {
+        "target": 720,
+        "current": 0,
+        "unit": "hours",
+        "description": "Mean Time Between Failures"
+      },
+      "error_rate": {
+        "target": 0.1,
+        "current": 0,
+        "unit": "percentage",
+        "measurement_period": "24_hours"
+      }
+    },
+    "business": {
+      "user_satisfaction": {
+        "score": 0,
+        "unit": "1-10_scale",
+        "measurement_method": "feedback_surveys"
+      },
+      "feature_adoption": {
+        "new_features_used": 0,
+        "unit": "percentage",
+        "measurement_period": "30_days"
+      },
+      "cost_efficiency": {
+        "cost_per_transaction": 0,
+        "unit": "usd",
+        "measurement_period": "monthly"
+      }
+    }
+  },
+  "automation": {
+    "enabled": true,
+    "collection_schedule": "daily",
+    "reporting_schedule": "weekly",
+    "tools": {
+      "ci_cd": "github_actions",
+      "monitoring": "prometheus",
+      "alerting": "grafana",
+      "testing": "pytest",
+      "security_scanning": "bandit, safety, semgrep",
+      "code_analysis": "sonarqube, radon"
+    },
+    "dashboards": {
+      "grafana_url": "",
+      "sonarqube_url": "",
+      "health_check_url": "/health"
+    }
+  },
+  "thresholds": {
+    "code_quality": {
+      "test_coverage_min": 80,
+      "complexity_max": 10,
+      "maintainability_min": 80
+    },
+    "security": {
+      "critical_vulnerabilities_max": 0,
+      "high_vulnerabilities_max": 2
+    },
+    "performance": {
+      "response_time_p95_max": 500,
+      "memory_usage_max": 512
+    },
+    "reliability": {
+      "uptime_min": 99.9,
+      "error_rate_max": 0.1
+    }
+  },
+  "reports": {
+    "last_generated": null,
+    "next_scheduled": null,
+    "recipients": [],
+    "format": "json_and_markdown"
+  }
+}
