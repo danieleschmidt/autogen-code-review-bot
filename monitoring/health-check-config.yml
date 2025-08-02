@@ -1,0 +1,137 @@
+# Health Check Configuration for AutoGen Code Review Bot
+# Defines comprehensive health checking strategy
+
+health_checks:
+  # Basic application health
+  liveness:
+    endpoint: "/health"
+    timeout: 5s
+    interval: 30s
+    retries: 3
+    
+  # Application readiness (dependencies available)
+  readiness:
+    endpoint: "/ready"
+    timeout: 10s
+    interval: 15s
+    retries: 3
+    dependencies:
+      - github_api
+      - openai_api
+      - cache_backend
+      
+  # Startup probe (initialization complete)
+  startup:
+    endpoint: "/startup"
+    timeout: 30s
+    interval: 10s
+    retries: 30
+    failure_threshold: 30
+
+# Health check endpoints configuration
+endpoints:
+  health:
+    path: "/health"
+    method: "GET"
+    expected_status: 200
+    expected_response:
+      status: "healthy"
+      
+  ready:
+    path: "/ready"
+    method: "GET"
+    expected_status: 200
+    expected_response:
+      status: "ready"
+      dependencies:
+        github_api: "connected"
+        openai_api: "available"
+        cache: "operational"
+        
+  startup:
+    path: "/startup"
+    method: "GET"
+    expected_status: 200
+    expected_response:
+      status: "started"
+      initialization: "complete"
+
+# Dependency health checks
+dependencies:
+  github_api:
+    type: "http"
+    url: "https://api.github.com/rate_limit"
+    timeout: 5s
+    expected_status: 200
+    
+  openai_api:
+    type: "http"
+    url: "https://api.openai.com/v1/models"
+    timeout: 10s
+    expected_status: 200
+    headers:
+      Authorization: "Bearer ${OPENAI_API_KEY}"
+      
+  cache_backend:
+    type: "redis"
+    host: "${REDIS_HOST:-localhost}"
+    port: "${REDIS_PORT:-6379}"
+    timeout: 3s
+    command: "PING"
+    
+  database:
+    type: "postgresql"
+    host: "${DB_HOST:-localhost}"
+    port: "${DB_PORT:-5432}"
+    database: "${DB_NAME:-autogen_review}"
+    timeout: 5s
+    query: "SELECT 1"
+
+# Alerting configuration
+alerts:
+  health_check_failure:
+    condition: "health_check_failed"
+    threshold: 3
+    window: "5m"
+    severity: "critical"
+    
+  dependency_unavailable:
+    condition: "dependency_failed"
+    threshold: 2
+    window: "2m"
+    severity: "warning"
+    
+  startup_timeout:
+    condition: "startup_failed"
+    threshold: 1
+    window: "10m"
+    severity: "critical"
+
+# Kubernetes configuration
+kubernetes:
+  liveness_probe:
+    http_get:
+      path: "/health"
+      port: 8080
+    initial_delay_seconds: 30
+    period_seconds: 30
+    timeout_seconds: 5
+    failure_threshold: 3
+    
+  readiness_probe:
+    http_get:
+      path: "/ready"
+      port: 8080
+    initial_delay_seconds: 5
+    period_seconds: 15
+    timeout_seconds: 10
+    failure_threshold: 3
+    
+  startup_probe:
+    http_get:
+      path: "/startup"
+      port: 8080
+    initial_delay_seconds: 10
+    period_seconds: 10
+    timeout_seconds: 30
+    failure_threshold: 30
