@@ -1,30 +1,41 @@
-# Global owners
-* @owner
+# Global code ownership
+* @danieleschmidt
 
-# Python code
-*.py @python-team
-src/ @python-team
+# Core application code
+/src/ @danieleschmidt
+/bot.py @danieleschmidt
+/review_pr.py @danieleschmidt
+
+# Agent configuration and templates
+/agent_config.yaml @danieleschmidt
+/src/autogen_code_review_bot/agents.py @danieleschmidt
+/src/autogen_code_review_bot/agent_templates.py @danieleschmidt
+
+# Security and configuration
+/src/autogen_code_review_bot/token_security.py @danieleschmidt
+/src/autogen_code_review_bot/subprocess_security.py @danieleschmidt
+/src/autogen_code_review_bot/config_validation.py @danieleschmidt
 
 # Documentation
-docs/ @docs-team
-*.md @docs-team
+/docs/ @danieleschmidt
+/README.md @danieleschmidt
+/SECURITY.md @danieleschmidt
 
-# Configuration files
-*.yml @devops-team
-*.yaml @devops-team
-Dockerfile @devops-team
-docker-compose.yml @devops-team
+# CI/CD and automation
+/.github/ @danieleschmidt
+/scripts/ @danieleschmidt
+/docs/workflows/ @danieleschmidt
 
-# Security sensitive files
-SECURITY.md @security-team
-.github/workflows/ @security-team
+# Infrastructure and deployment
+/Dockerfile* @danieleschmidt
+/docker-compose*.yml @danieleschmidt
+/monitoring/ @danieleschmidt
 
-# CI/CD
-.github/ @devops-team
-Makefile @devops-team
+# Testing
+/tests/ @danieleschmidt
+/benchmarks/ @danieleschmidt
 
-# Dependencies
-requirements*.txt @python-team
-pyproject.toml @python-team
-setup.py @python-team
-EOF < /dev/null
+# Build and package management
+/pyproject.toml @danieleschmidt
+/setup.py @danieleschmidt
+/Makefile @danieleschmidt
