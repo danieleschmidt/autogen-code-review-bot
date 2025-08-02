@@ -13,7 +13,7 @@ dependencies = [
 
 [project.optional-dependencies]
 monitoring = [
-    "psutil>=5.9.0,<6.0.0"
+    "psutil>=5.9.0,<8.0.0"
 ]
 dev = [
     "pre-commit>=3.5.0,<4.0.0",
