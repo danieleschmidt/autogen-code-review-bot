@@ -1,0 +1,91 @@
+# Code ownership and review assignments for AutoGen Code Review Bot
+# 
+# For more information about CODEOWNERS:
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Global defaults - these users/teams are requested for review when someone opens a PR
+* @autogen-maintainers @code-review-team
+
+# Core application code
+/src/ @core-developers @autogen-maintainers
+/bot.py @core-developers @autogen-maintainers
+/planner.py @core-developers @autogen-maintainers
+/review_pr.py @core-developers @autogen-maintainers
+
+# Agent configuration and templates
+/agent_config.yaml @agent-specialists @autogen-maintainers
+/src/autogen_code_review_bot/agent_*.py @agent-specialists @autogen-maintainers
+
+# Security-related files
+/src/autogen_code_review_bot/token_security.py @security-team @autogen-maintainers
+/src/autogen_code_review_bot/subprocess_security.py @security-team @autogen-maintainers
+/SECURITY.md @security-team @autogen-maintainers
+/.github/workflows/security*.yml @security-team @devops-team
+/monitoring/security/ @security-team @sre-team
+
+# Infrastructure and deployment
+/Dockerfile* @devops-team @sre-team
+/docker-compose*.yml @devops-team @sre-team
+/monitoring/ @sre-team @devops-team
+/scripts/ @sre-team @devops-team
+/Makefile @devops-team @sre-team
+
+# CI/CD and automation
+/.github/ @devops-team @autogen-maintainers
+/.pre-commit-config.yaml @devops-team @code-quality-team
+/pyproject.toml @core-developers @devops-team
+/setup.py @core-developers @devops-team
+
+# Testing infrastructure
+/tests/ @qa-team @core-developers
+/benchmarks/ @performance-team @qa-team
+/pytest.ini @qa-team @core-developers
+/conftest.py @qa-team @core-developers
+
+# Documentation
+/docs/ @documentation-team @autogen-maintainers
+/README.md @documentation-team @autogen-maintainers
+/CONTRIBUTING.md @documentation-team @autogen-maintainers
+/CHANGELOG.md @documentation-team @autogen-maintainers
+
+# Project management and governance
+/PROJECT_CHARTER.md @project-leads @autogen-maintainers
+/ARCHITECTURE.md @architects @autogen-maintainers
+/docs/adr/ @architects @autogen-maintainers
+/docs/ROADMAP.md @project-leads @product-managers
+
+# Configuration files
+/.env.example @devops-team @security-team
+/.editorconfig @code-quality-team
+/.gitignore @devops-team
+/.dockerignore @devops-team
+
+# Language-specific configurations
+/ruff.toml @code-quality-team @core-developers
+/.secrets.baseline @security-team @devops-team
+
+# Monitoring and observability
+/monitoring/prometheus.yml @sre-team @monitoring-team
+/monitoring/grafana-*.json @sre-team @monitoring-team
+/monitoring/alerts/ @sre-team @on-call-team
+/docs/monitoring/ @sre-team @documentation-team
+/docs/SRE_*.md @sre-team @documentation-team
+
+# Performance and optimization
+/benchmarks/ @performance-team @core-developers
+/src/autogen_code_review_bot/caching.py @performance-team @core-developers
+/src/autogen_code_review_bot/monitoring.py @performance-team @sre-team
+
+# Integration and external APIs
+/src/autogen_code_review_bot/github_integration.py @integration-team @core-developers
+/src/autogen_code_review_bot/webhook*.py @integration-team @core-developers
+/setup_webhook.py @integration-team @devops-team
+
+# License and legal
+/LICENSE @legal-team @autogen-maintainers
+/CODE_OF_CONDUCT.md @community-team @autogen-maintainers
+
+# Special files that require multiple team approvals
+/pyproject.toml @core-developers @devops-team @security-team
+/Dockerfile @devops-team @security-team @sre-team
+/.github/workflows/ @devops-team @security-team @qa-team
