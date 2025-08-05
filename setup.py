@@ -1,9 +1,11 @@
-from setuptools import setup, find_packages
+"""
+Setup script for AutoGen Code Review Bot.
 
-setup(
-    name="autogen-review-bot",
-    version="0.1.0",
-    packages=find_packages(where="src"),
-    package_dir={"": "src"},
-    python_requires=">=3.8",
-)
+This file is maintained for compatibility. The primary configuration
+is in pyproject.toml following modern Python packaging standards.
+"""
+
+from setuptools import setup
+
+# Use pyproject.toml for configuration
+setup()
