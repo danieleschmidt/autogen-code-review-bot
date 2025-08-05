@@ -1,44 +1,64 @@
+```json
 {
   "name": "AutoGen Code Review Bot",
   "image": "mcr.microsoft.com/devcontainers/python:3.11-bullseye",
+  
   "features": {
     "ghcr.io/devcontainers/features/git:1": {},
     "ghcr.io/devcontainers/features/github-cli:1": {},
-    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "18"
+    }
   },
+
   "customizations": {
     "vscode": {
       "extensions": [
         "ms-python.python",
-        "ms-python.flake8",
         "ms-python.pylint",
-        "charliermarsh.ruff",
         "ms-python.black-formatter",
+        "charliermarsh.ruff",
+        "ms-python.mypy-type-checker",
         "ms-toolsai.jupyter",
+        "ms-vscode.test-adapter-converter",
+        "littlefoxteam.vscode-python-test-adapter",
         "GitHub.copilot",
+        "GitHub.copilot-chat",
+        "GitHub.vscode-pull-request-github",
         "ms-vscode.vscode-json",
         "redhat.vscode-yaml",
         "ms-vscode.makefile-tools",
         "eamodio.gitlens",
         "ms-vscode-remote.remote-containers",
-        "ms-vscode.test-adapter-converter",
-        "littlefoxteam.vscode-python-test-adapter"
+        "timonwong.shellcheck",
+        "foxundermoon.shell-format",
+        "ms-azuretools.vscode-docker",
+        "streetsidesoftware.code-spell-checker"
       ],
       "settings": {
         "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "python.formatting.provider": "black",
         "python.linting.enabled": true,
         "python.linting.pylintEnabled": false,
-        "python.linting.flake8Enabled": false,
-        "python.formatting.provider": "none",
+        "python.linting.ruffEnabled": true,
         "[python]": {
           "editor.defaultFormatter": "charliermarsh.ruff",
           "editor.formatOnSave": true,
           "editor.codeActionsOnSave": {
-            "source.organizeImports": true
+            "source.organizeImports": true,
+            "source.fixAll": true
           }
         },
         "python.testing.pytestEnabled": true,
         "python.testing.pytestArgs": ["tests"],
+        "python.testing.unittestEnabled": false,
+        "python.testing.nosetestsEnabled": false,
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+          "source.organizeImports": true,
+          "source.fixAll": true
+        },
         "files.exclude": {
           "**/__pycache__": true,
           "**/*.pyc": true,
@@ -47,17 +67,21 @@
           "htmlcov": true,
           ".mypy_cache": true,
           ".ruff_cache": true
+        },
+        "files.associations": {
+          "*.yaml": "yaml",
+          "*.yml": "yaml"
+        },
+        "yaml.schemas": {
+          "https://json.schemastore.org/github-workflow.json": ".github/workflows/*.{yml,yaml}",
+          "https://json.schemastore.org/github-action.json": "action.{yml,yaml}"
         }
       }
     }
   },
-  "postCreateCommand": "pip install -e .[dev]",
-  "remoteUser": "vscode",
-  "mounts": [
-    "source=${localWorkspaceFolder}/.git,target=/workspaces/${localWorkspaceFolderBasename}/.git,type=bind,consistency=cached"
-  ],
-  "postStartCommand": "pre-commit install",
-  "forwardPorts": [8000, 5000],
+
+  "forwardPorts": [8000, 8080, 5000],
+  
   "portsAttributes": {
     "8000": {
       "label": "Webhook Server",
@@ -67,6 +91,23 @@
       "label": "Dev Server", 
       "onAutoForward": "notify"
     }
+  },
+
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  
+  "postStartCommand": "pre-commit install",
+
+  "mounts": [
+    "source=${localWorkspaceFolder}/.git,target=/workspaces/${localWorkspaceFolderBasename}/.git,type=bind,consistency=cached",
+    "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
+  ],
+
+  "remoteUser": "vscode",
+
+  "containerEnv": {
+    "TZ": "UTC",
+    "PYTHONUNBUFFERED": "1",
+    "PYTHONDONTWRITEBYTECODE": "1"
   }
 }
-EOF < /dev/null
+```
