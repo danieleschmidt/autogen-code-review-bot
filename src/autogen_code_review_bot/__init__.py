@@ -1,3 +1,4 @@
+```python
 from .agents import (
     AgentConfig,
     BaseAgent,
@@ -17,6 +18,30 @@ from .github_integration import (
     post_comment,
     analyze_and_comment,
     format_analysis_result,
+)
+from .config import (
+    Config,
+    load_config,
+    get_github_api_url,
+    get_default_timeout,
+    get_http_timeout,
+    get_default_linters,
+)
+from .metrics import (
+    MetricsRegistry,
+    Counter,
+    Gauge,
+    Histogram,
+    get_metrics_registry,
+    record_operation_metrics,
+    with_metrics,
+)
+from .circuit_breaker import (
+    CircuitBreaker,
+    CircuitBreakerConfig,
+    CircuitBreakerError,
+    get_circuit_breaker,
+    get_all_circuit_breaker_stats,
 )
 
 # Quantum-Inspired Task Planner
@@ -62,6 +87,24 @@ __all__ = [
     "post_comment",
     "analyze_and_comment",
     "format_analysis_result",
+    "Config",
+    "load_config",
+    "get_github_api_url",
+    "get_default_timeout",
+    "get_http_timeout",
+    "get_default_linters",
+    "MetricsRegistry",
+    "Counter",
+    "Gauge", 
+    "Histogram",
+    "get_metrics_registry",
+    "record_operation_metrics",
+    "with_metrics",
+    "CircuitBreaker",
+    "CircuitBreakerConfig",
+    "CircuitBreakerError",
+    "get_circuit_breaker",
+    "get_all_circuit_breaker_stats",
     
     # Quantum-Inspired Task Planner
     "QuantumTask",
@@ -79,3 +122,4 @@ __all__ = [
     "LoadBalancer",
     "AutoScaler",
 ]
+```
