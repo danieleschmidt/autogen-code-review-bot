@@ -19,7 +19,30 @@ from .github_integration import (
     format_analysis_result,
 )
 
+# Quantum-Inspired Task Planner
+from .quantum_planner import (
+    QuantumTask,
+    TaskPriority,
+    TaskState,
+    QuantumScheduler,
+    QuantumTaskPlanner,
+)
+from .quantum_validator import (
+    ValidationError,
+    QuantumError,
+    ValidationResult,
+    RobustQuantumPlanner,
+)
+from .quantum_optimizer import (
+    OptimizedQuantumPlanner,
+    IntelligentCache,
+    ParallelQuantumProcessor,
+    LoadBalancer,
+    AutoScaler,
+)
+
 __all__ = [
+    # Original AutoGen Code Review Bot
     "AgentConfig",
     "BaseAgent",
     "CoderAgent",
@@ -39,4 +62,20 @@ __all__ = [
     "post_comment",
     "analyze_and_comment",
     "format_analysis_result",
+    
+    # Quantum-Inspired Task Planner
+    "QuantumTask",
+    "TaskPriority", 
+    "TaskState",
+    "QuantumScheduler",
+    "QuantumTaskPlanner",
+    "ValidationError",
+    "QuantumError",
+    "ValidationResult",
+    "RobustQuantumPlanner",
+    "OptimizedQuantumPlanner",
+    "IntelligentCache",
+    "ParallelQuantumProcessor",
+    "LoadBalancer",
+    "AutoScaler",
 ]
