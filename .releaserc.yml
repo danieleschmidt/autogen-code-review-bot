@@ -1,0 +1,120 @@
+# Semantic Release configuration for AutoGen Code Review Bot
+# Automates versioning and changelog generation based on commit messages
+
+branches:
+  - name: main
+  - name: develop
+    prerelease: true
+
+plugins:
+  # Analyze commits to determine version bump
+  - "@semantic-release/commit-analyzer"
+  
+  # Generate release notes
+  - "@semantic-release/release-notes-generator"
+  
+  # Update changelog
+  - path: "@semantic-release/changelog"
+    changelogFile: "CHANGELOG.md"
+  
+  # Update version in pyproject.toml
+  - path: "@semantic-release/exec"
+    prepareCmd: |
+      sed -i 's/version = ".*"/version = "${nextRelease.version}"/' pyproject.toml
+  
+  # Create git tag and GitHub release
+  - "@semantic-release/github"
+  
+  # Publish to PyPI (optional - uncomment when ready)
+  # - path: "@semantic-release/exec"
+  #   publishCmd: |
+  #     python -m build
+  #     python -m twine upload dist/*
+  
+  # Update files in git
+  - path: "@semantic-release/git"
+    assets:
+      - "pyproject.toml"
+      - "CHANGELOG.md"
+    message: "chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
+
+# Commit message format configuration
+preset: "conventionalcommits"
+presetConfig:
+  types:
+    - type: "feat"
+      section: "✨ Features"
+    - type: "fix"
+      section: "🐛 Bug Fixes"
+    - type: "perf"
+      section: "⚡ Performance Improvements"
+    - type: "revert"
+      section: "⏪ Reverts"
+    - type: "docs"
+      section: "📚 Documentation"
+    - type: "style"
+      section: "💄 Styles"
+    - type: "refactor"
+      section: "♻️ Code Refactoring"
+    - type: "test"
+      section: "✅ Tests"
+    - type: "build"
+      section: "🏗️ Build System"
+    - type: "ci"
+      section: "👷 CI/CD"
+    - type: "chore"
+      hidden: true
+    - type: "security"
+      section: "🔒 Security"
+
+# Release rules for version bumping
+releaseRules:
+  - type: "feat"
+    release: "minor"
+  - type: "fix" 
+    release: "patch"
+  - type: "perf"
+    release: "patch"
+  - type: "revert"
+    release: "patch"
+  - type: "docs"
+    release: false
+  - type: "style"
+    release: false
+  - type: "refactor"
+    release: "patch"
+  - type: "test"
+    release: false
+  - type: "build"
+    release: "patch"
+  - type: "ci"
+    release: false
+  - type: "chore"
+    release: false
+  - type: "security"
+    release: "patch"
+  - breaking: true
+    release: "major"
+
+# GitHub release configuration
+github:
+  successComment: |
+    :tada: This ${issue.pull_request ? 'PR is included' : 'issue has been resolved'} in version ${nextRelease.version} :tada:
+    
+    The release is available on [GitHub Releases](${releases.filter(release => !!release.name)[0].url})
+  failComment: |
+    :x: The automated release from the `${branch.name}` branch failed. :x:
+    
+    I recommend you to check the [workflow logs](${env.GITHUB_SERVER_URL}/${env.GITHUB_REPOSITORY}/actions/runs/${env.GITHUB_RUN_ID}) for more details.
+  releasedLabels:
+    - "released"
+  addReleases: "bottom"
+
+# Tag format
+tagFormat: "v${version}"
+
+# Dry run mode (set to false for actual releases)
+dryRun: false
+
+# Debug mode
+debug: false
