@@ -1,4 +1,3 @@
-```python
 from .agents import (
     AgentConfig,
     BaseAgent,
@@ -122,4 +121,3 @@ __all__ = [
     "LoadBalancer",
     "AutoScaler",
 ]
-```
