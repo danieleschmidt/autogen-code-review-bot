@@ -1,6 +1,7 @@
 """Data models for PR analysis results."""
 
 from dataclasses import dataclass
+from typing import Optional, Dict, Any
 
 
 @dataclass
@@ -9,6 +10,8 @@ class AnalysisSection:
 
     tool: str
     output: str
+    return_code: Optional[int] = None
+    metadata: Optional[Dict[str, Any]] = None
 
 
 @dataclass
@@ -18,3 +21,4 @@ class PRAnalysisResult:
     security: AnalysisSection
     style: AnalysisSection
     performance: AnalysisSection
+    metadata: Optional[Dict[str, Any]] = None
