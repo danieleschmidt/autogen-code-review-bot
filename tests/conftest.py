@@ -1,4 +1,3 @@
-```python
 """
 Pytest configuration and fixtures for AutoGen Code Review Bot tests.
 
@@ -574,4 +573,3 @@ def pytest_configure(config):
     config.addinivalue_line(
         "markers", "performance: marks tests as performance-related"
     )
-```

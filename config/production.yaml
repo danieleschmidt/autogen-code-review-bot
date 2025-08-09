@@ -1,0 +1,151 @@
+# Production Configuration for AutoGen Code Review Bot
+# This file contains enterprise-grade configuration settings
+
+agents:
+  coder:
+    model: "gpt-4"
+    temperature: 0.3
+    max_tokens: 2000
+    focus_areas: ["functionality", "bugs", "edge_cases", "performance"]
+    timeout: 60
+    retry_attempts: 3
+    
+  reviewer:
+    model: "gpt-4"
+    temperature: 0.1
+    max_tokens: 2000
+    focus_areas: ["security", "performance", "standards", "maintainability"]
+    timeout: 60
+    retry_attempts: 3
+
+github:
+  webhook_secret: "${GITHUB_WEBHOOK_SECRET}"
+  bot_token: "${GITHUB_TOKEN}"
+  api_url: "https://api.github.com"
+  request_timeout: 30
+  max_retries: 3
+  rate_limit_buffer: 100
+  
+review_criteria:
+  security_scan: true
+  performance_check: true
+  test_coverage: true
+  documentation: true
+  complexity_analysis: true
+  dependency_audit: true
+  
+server:
+  host: "0.0.0.0"
+  port: 8080
+  workers: 4
+  max_request_size: "10MB"
+  request_timeout: 300
+  keepalive_timeout: 65
+  
+cache:
+  enabled: true
+  backend: "redis"
+  redis_url: "${REDIS_URL:-redis://localhost:6379}"
+  ttl_hours: 24
+  max_memory: "512MB"
+  cleanup_interval: 3600
+  
+logging:
+  level: "INFO"
+  format: "structured"
+  output: ["stdout", "file"]
+  file_path: "/var/log/autogen-bot/app.log"
+  max_file_size: "100MB"
+  backup_count: 10
+  structured_logging: true
+  request_id_tracking: true
+  
+monitoring:
+  enabled: true
+  metrics_port: 9090
+  health_check_port: 8081
+  prometheus:
+    enabled: true
+    path: "/metrics"
+  jaeger:
+    enabled: true
+    agent_host: "jaeger-agent"
+    agent_port: 6831
+    
+security:
+  enable_csrf_protection: true
+  enable_rate_limiting: true
+  rate_limit_requests: 1000
+  rate_limit_window: 3600  # 1 hour
+  trusted_proxies: []
+  cors_origins: []
+  webhook_signature_required: true
+  subprocess_timeout: 120
+  max_file_size: "50MB"
+  
+resilience:
+  circuit_breaker:
+    enabled: true
+    failure_threshold: 5
+    recovery_timeout: 30
+    half_open_max_calls: 3
+  retry_policy:
+    max_attempts: 3
+    backoff_multiplier: 2.0
+    max_delay: 60
+  timeout:
+    analysis: 300
+    webhook_processing: 120
+    github_api: 30
+    
+performance:
+  parallel_execution: true
+  max_concurrent_analyses: 10
+  analysis_queue_size: 100
+  memory_limit: "2GB"
+  cpu_limit: "2000m"
+  
+linters:
+  python: 
+    - "ruff"
+    - "bandit"
+    - "mypy"
+  javascript: 
+    - "eslint" 
+    - "prettier"
+  typescript:
+    - "eslint"
+    - "@typescript-eslint/eslint-plugin"
+  go:
+    - "golangci-lint"
+  rust:
+    - "clippy"
+  ruby:
+    - "rubocop"
+
+# Environment-specific overrides
+environments:
+  development:
+    logging:
+      level: "DEBUG"
+    cache:
+      ttl_hours: 1
+    security:
+      rate_limit_requests: 10000
+      
+  staging:
+    logging:
+      level: "INFO"
+    monitoring:
+      enabled: true
+      
+  production:
+    logging:
+      level: "INFO"
+    security:
+      rate_limit_requests: 1000
+    monitoring:
+      enabled: true
+    resilience:
+      circuit_breaker:
+        enabled: true

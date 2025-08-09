@@ -1,4 +1,3 @@
-```python
 from __future__ import annotations
 
 import json
@@ -798,4 +797,3 @@ def analyze_and_comment(
             context=context
         )
         raise
-```
