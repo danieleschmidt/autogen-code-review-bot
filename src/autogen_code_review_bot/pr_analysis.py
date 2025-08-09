@@ -23,10 +23,10 @@ from .models import PRAnalysisResult, AnalysisSection
 from .language_detection import detect_language
 from .agents import run_dual_review, load_agents_from_yaml
 from .caching import LinterCache
-from .logging_utils import get_logger
+from .logging_config import get_logger
 from .metrics import record_operation_metrics, get_metrics_registry
 from .exceptions import AnalysisError, LinterError, SecurityError
-from .subprocess_security import run_secure_subprocess
+from .subprocess_security import safe_subprocess_run
 
 logger = get_logger(__name__)
 metrics = get_metrics_registry()

@@ -62,3 +62,13 @@ class ToolError(CodeReviewBotError):
     tools fail to execute or return unexpected results.
     """
     pass
+
+
+class LinterError(ToolError):
+    """Exception for linter-related errors."""
+    pass
+
+
+class SecurityError(AnalysisError):
+    """Exception for security-related errors."""
+    pass
