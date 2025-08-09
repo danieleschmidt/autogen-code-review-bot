@@ -82,7 +82,7 @@ class TestHealthChecker:
                 status=HealthStatus.HEALTHY,
                 message="Mock check passed",
                 duration_ms=10.0,
-                timestamp=pytest.test_timestamp
+                timestamp=datetime.now(timezone.utc)
             ))
             checker.checks.append(mock_check)
             
@@ -460,12 +460,4 @@ class TestWebhookSignatureValidation:
         assert result is False
 
 
-@pytest.fixture
-def test_timestamp():
-    """Provide consistent timestamp for tests."""
-    from datetime import datetime, timezone
-    return datetime.now(timezone.utc)
-
-
-# Add test_timestamp to pytest namespace for use in other modules
-pytest.test_timestamp = test_timestamp()
+# Test utilities - no fixtures needed since we use datetime directly

@@ -1,0 +1,283 @@
+# Production Docker Compose for AutoGen Code Review Bot
+version: '3.8'
+
+services:
+  autogen-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: autogen-code-review-bot:latest
+    container_name: autogen-bot-prod
+    restart: unless-stopped
+    
+    environment:
+      - ENVIRONMENT=production
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - GITHUB_WEBHOOK_SECRET=${GITHUB_WEBHOOK_SECRET}
+      - REDIS_URL=redis://redis:6379
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/autogen_bot
+      - LOG_LEVEL=INFO
+      - WORKERS=4
+      - MAX_CONCURRENT_ANALYSES=10
+      
+    ports:
+      - "8080:8080"      # Main API
+      - "9090:9090"      # Metrics
+      - "8081:8081"      # Health checks
+      
+    volumes:
+      - ./logs:/app/logs
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      
+    depends_on:
+      - redis
+      - postgres
+      - prometheus
+      
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+      
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '1.0'
+          memory: 1G
+    
+    networks:
+      - autogen-network
+      - monitoring-network
+
+  # Redis for caching and rate limiting
+  redis:
+    image: redis:7-alpine
+    container_name: autogen-redis-prod
+    restart: unless-stopped
+    
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    
+    volumes:
+      - redis-data:/data
+      - ./monitoring/redis.conf:/usr/local/etc/redis/redis.conf:ro
+      
+    ports:
+      - "127.0.0.1:6379:6379"
+      
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      
+    networks:
+      - autogen-network
+
+  # PostgreSQL for persistent data
+  postgres:
+    image: postgres:15-alpine
+    container_name: autogen-postgres-prod
+    restart: unless-stopped
+    
+    environment:
+      - POSTGRES_DB=autogen_bot
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256
+      
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+      
+    ports:
+      - "127.0.0.1:5432:5432"
+      
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d autogen_bot"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      
+    networks:
+      - autogen-network
+
+  # Nginx reverse proxy and load balancer
+  nginx:
+    image: nginx:alpine
+    container_name: autogen-nginx-prod
+    restart: unless-stopped
+    
+    volumes:
+      - ./nginx/nginx-prod.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - ./logs/nginx:/var/log/nginx
+      
+    ports:
+      - "80:80"
+      - "443:443"
+      
+    depends_on:
+      - autogen-bot
+      
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      
+    networks:
+      - autogen-network
+      - external
+
+  # Prometheus for metrics collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: autogen-prometheus-prod
+    restart: unless-stopped
+    
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+      
+    volumes:
+      - ./monitoring/prometheus-prod.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/rules:/etc/prometheus/rules:ro
+      - prometheus-data:/prometheus
+      
+    ports:
+      - "127.0.0.1:9090:9090"
+      
+    networks:
+      - monitoring-network
+      - autogen-network
+
+  # Grafana for visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: autogen-grafana-prod
+    restart: unless-stopped
+    
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_INSTALL_PLUGINS=redis-datasource
+      
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      
+    ports:
+      - "127.0.0.1:3000:3000"
+      
+    depends_on:
+      - prometheus
+      
+    networks:
+      - monitoring-network
+
+  # Jaeger for distributed tracing
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: autogen-jaeger-prod
+    restart: unless-stopped
+    
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+      
+    ports:
+      - "127.0.0.1:16686:16686"  # UI
+      - "127.0.0.1:14268:14268"  # HTTP collector
+      
+    volumes:
+      - jaeger-data:/tmp
+      
+    networks:
+      - monitoring-network
+
+  # Log aggregation with ELK stack
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: autogen-elasticsearch-prod
+    restart: unless-stopped
+    
+    environment:
+      - discovery.type=single-node
+      - ES_JAVA_OPTS=-Xms1g -Xmx1g
+      - xpack.security.enabled=false
+      
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+      
+    ports:
+      - "127.0.0.1:9200:9200"
+      
+    networks:
+      - monitoring-network
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.11.0
+    container_name: autogen-logstash-prod
+    restart: unless-stopped
+    
+    volumes:
+      - ./monitoring/logstash/logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro
+      - ./logs:/var/log/autogen:ro
+      
+    depends_on:
+      - elasticsearch
+      
+    networks:
+      - monitoring-network
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.11.0
+    container_name: autogen-kibana-prod
+    restart: unless-stopped
+    
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      
+    ports:
+      - "127.0.0.1:5601:5601"
+      
+    depends_on:
+      - elasticsearch
+      
+    networks:
+      - monitoring-network
+
+volumes:
+  redis-data:
+    driver: local
+  postgres-data:
+    driver: local
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
+  jaeger-data:
+    driver: local
+  elasticsearch-data:
+    driver: local
+
+networks:
+  autogen-network:
+    driver: bridge
+    internal: false
+    
+  monitoring-network:
+    driver: bridge
+    internal: false
+    
+  external:
+    driver: bridge
