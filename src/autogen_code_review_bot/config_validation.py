@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import re
-import yaml
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Union, Set
 from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Dict, Optional, Set
+
+import yaml
 
 from .logging_config import get_logger
 
@@ -20,7 +21,7 @@ class ConfigError(Exception):
 
 class ValidationError(ConfigError):
     """Raised when configuration validation fails."""
-    
+
     def __init__(self, message: str, field: Optional[str] = None, value: Any = None):
         super().__init__(message)
         self.field = field
@@ -30,9 +31,9 @@ class ValidationError(ConfigError):
 @dataclass
 class SchemaDefinition:
     """Defines validation schema for configuration sections."""
-    
+
     fields: Dict[str, Dict[str, Any]] = field(default_factory=dict)
-    
+
     def validate(self, config: Dict[str, Any]) -> None:
         """Validate configuration against this schema."""
         # Check required fields
@@ -42,17 +43,17 @@ class SchemaDefinition:
                     f"Required field '{field_name}' is missing",
                     field=field_name
                 )
-        
+
         # Validate each field in the config
         for field_name, value in config.items():
             if field_name not in self.fields:
                 # Allow unknown fields but log warning
                 logger.warning(f"Unknown configuration field: {field_name}")
                 continue
-            
+
             field_def = self.fields[field_name]
             self._validate_field(field_name, value, field_def)
-    
+
     def _validate_field(self, field_name: str, value: Any, field_def: Dict[str, Any]) -> None:
         """Validate a single field against its definition."""
         # Type validation
@@ -63,26 +64,26 @@ class SchemaDefinition:
                 field=field_name,
                 value=value
             )
-        
+
         # Numeric constraints
         if isinstance(value, (int, float)):
             min_val = field_def.get("min")
             max_val = field_def.get("max")
-            
+
             if min_val is not None and value < min_val:
                 raise ValidationError(
                     f"Field '{field_name}' must be >= {min_val}, got {value}",
                     field=field_name,
                     value=value
                 )
-            
+
             if max_val is not None and value > max_val:
                 raise ValidationError(
                     f"Field '{field_name}' must be <= {max_val}, got {value}",
                     field=field_name,
                     value=value
                 )
-        
+
         # String constraints
         if isinstance(value, str):
             pattern = field_def.get("pattern")
@@ -92,7 +93,7 @@ class SchemaDefinition:
                     field=field_name,
                     value=value
                 )
-            
+
             allowed_values = field_def.get("allowed")
             if allowed_values and value not in allowed_values:
                 raise ValidationError(
@@ -100,7 +101,7 @@ class SchemaDefinition:
                     field=field_name,
                     value=value
                 )
-            
+
             min_length = field_def.get("min_length")
             if min_length is not None and len(value) < min_length:
                 raise ValidationError(
@@ -108,7 +109,7 @@ class SchemaDefinition:
                     field=field_name,
                     value=value
                 )
-        
+
         # List constraints
         if isinstance(value, list):
             item_type = field_def.get("item_type")
@@ -235,7 +236,7 @@ ALLOWED_LINTER_TOOLS: Set[str] = {
 def validate_linter_config(config: Dict[str, Any]) -> None:
     """Validate linter configuration structure and content."""
     LINTER_SCHEMA.validate(config)
-    
+
     linters = config.get("linters", {})
     if not isinstance(linters, dict):
         raise ValidationError(
@@ -243,7 +244,7 @@ def validate_linter_config(config: Dict[str, Any]) -> None:
             field="linters",
             value=linters
         )
-    
+
     for language, tool in linters.items():
         if not isinstance(language, str):
             raise ValidationError(
@@ -251,14 +252,14 @@ def validate_linter_config(config: Dict[str, Any]) -> None:
                 field=f"linters.{language}",
                 value=language
             )
-        
+
         if not isinstance(tool, str):
             raise ValidationError(
                 f"Linter tool for '{language}' must be a string, got {type(tool).__name__}",
                 field=f"linters.{language}",
                 value=tool
             )
-        
+
         if tool not in ALLOWED_LINTER_TOOLS:
             raise ValidationError(
                 f"Unknown linter tool '{tool}' for language '{language}'. "
@@ -271,7 +272,7 @@ def validate_linter_config(config: Dict[str, Any]) -> None:
 def validate_agent_config(config: Dict[str, Any]) -> None:
     """Validate agent configuration structure and content."""
     AGENT_SCHEMA.validate(config)
-    
+
     agents = config.get("agents", {})
     if not isinstance(agents, dict):
         raise ValidationError(
@@ -279,7 +280,7 @@ def validate_agent_config(config: Dict[str, Any]) -> None:
             field="agents",
             value=agents
         )
-    
+
     for agent_name, agent_config in agents.items():
         if not isinstance(agent_config, dict):
             raise ValidationError(
@@ -287,7 +288,7 @@ def validate_agent_config(config: Dict[str, Any]) -> None:
                 field=f"agents.{agent_name}",
                 value=agent_config
             )
-        
+
         try:
             AGENT_DETAIL_SCHEMA.validate(agent_config)
         except ValidationError as e:
@@ -302,7 +303,7 @@ def validate_agent_config(config: Dict[str, Any]) -> None:
 def validate_coverage_config(config: Dict[str, Any]) -> None:
     """Validate coverage configuration structure and content."""
     COVERAGE_SCHEMA.validate(config)
-    
+
     coverage = config.get("coverage", {})
     if not isinstance(coverage, dict):
         raise ValidationError(
@@ -310,7 +311,7 @@ def validate_coverage_config(config: Dict[str, Any]) -> None:
             field="coverage",
             value=coverage
         )
-    
+
     if coverage:  # Only validate if coverage section exists
         try:
             COVERAGE_DETAIL_SCHEMA.validate(coverage)
@@ -326,7 +327,7 @@ def validate_coverage_config(config: Dict[str, Any]) -> None:
 def validate_bot_config(config: Dict[str, Any]) -> None:
     """Validate main bot configuration structure and content."""
     BOT_SCHEMA.validate(config)
-    
+
     # Validate GitHub section if present
     github = config.get("github", {})
     if github:
@@ -336,7 +337,7 @@ def validate_bot_config(config: Dict[str, Any]) -> None:
                 field="github",
                 value=github
             )
-        
+
         try:
             GITHUB_DETAIL_SCHEMA.validate(github)
         except ValidationError as e:
@@ -345,7 +346,7 @@ def validate_bot_config(config: Dict[str, Any]) -> None:
                 field=f"github.{e.field}" if e.field else "github",
                 value=e.value
             )
-        
+
         # Additional validation for GitHub fields
         webhook_secret = github.get("webhook_secret", "")
         if webhook_secret == "":
@@ -354,7 +355,7 @@ def validate_bot_config(config: Dict[str, Any]) -> None:
                 field="github.webhook_secret",
                 value=webhook_secret
             )
-    
+
     # Validate review criteria if present
     review_criteria = config.get("review_criteria", {})
     if review_criteria:
@@ -364,7 +365,7 @@ def validate_bot_config(config: Dict[str, Any]) -> None:
                 field="review_criteria",
                 value=review_criteria
             )
-        
+
         # Validate boolean flags
         for key, value in review_criteria.items():
             if not isinstance(value, bool):
@@ -377,7 +378,7 @@ def validate_bot_config(config: Dict[str, Any]) -> None:
 
 class ConfigValidator:
     """Main configuration validator that coordinates validation of different config types."""
-    
+
     def __init__(self):
         self.validators = {
             "linter": validate_linter_config,
@@ -385,24 +386,24 @@ class ConfigValidator:
             "coverage": validate_coverage_config,
             "bot": validate_bot_config
         }
-    
+
     def validate_file(self, file_path: str, config_type: str) -> Dict[str, Any]:
         """Validate a configuration file."""
         path = Path(file_path)
-        
+
         if not path.exists():
             raise ConfigError(f"Configuration file not found: {file_path}")
-        
+
         try:
-            with open(path, 'r', encoding='utf-8') as f:
+            with open(path, encoding='utf-8') as f:
                 config = yaml.safe_load(f) or {}
         except yaml.YAMLError as e:
             raise ConfigError(f"Malformed YAML in configuration file {file_path}: {e}")
         except OSError as e:
             raise ConfigError(f"Unable to read configuration file {file_path}: {e}")
-        
+
         return self.validate_dict(config, config_type)
-    
+
     def validate_dict(self, config: Dict[str, Any], config_type: str) -> Dict[str, Any]:
         """Validate a configuration dictionary."""
         if config_type not in self.validators:
@@ -410,7 +411,7 @@ class ConfigValidator:
                 f"Unknown configuration type '{config_type}'. "
                 f"Supported types: {', '.join(self.validators.keys())}"
             )
-        
+
         try:
             self.validators[config_type](config)
             logger.debug(f"Successfully validated {config_type} configuration")
@@ -420,17 +421,17 @@ class ConfigValidator:
             error_msg = str(e)
             if e.field:
                 error_msg = f"Configuration error in field '{e.field}': {error_msg}"
-            
+
             # Add suggestions based on error type
             if "unknown" in error_msg.lower() and "linter" in error_msg.lower():
-                error_msg += f"\n\nHint: Run 'python -c \"from autogen_code_review_bot.config_validation import ALLOWED_LINTER_TOOLS; print(sorted(ALLOWED_LINTER_TOOLS))\"' to see allowed linter tools."
+                error_msg += "\n\nHint: Run 'python -c \"from autogen_code_review_bot.config_validation import ALLOWED_LINTER_TOOLS; print(sorted(ALLOWED_LINTER_TOOLS))\"' to see allowed linter tools."
             elif "temperature" in error_msg.lower():
                 error_msg += "\n\nHint: Temperature values should be between 0.0 (deterministic) and 1.0 (creative)."
             elif "required" in error_msg.lower():
                 error_msg += f"\n\nHint: Check the configuration documentation for required fields in {config_type} configs."
-            
+
             raise ConfigError(error_msg)
-    
+
     def get_validation_summary(self) -> Dict[str, Dict[str, Any]]:
         """Get a summary of supported configuration types and their requirements."""
         return {
@@ -506,23 +507,23 @@ def validate_config_dict(config: Dict[str, Any], config_type: str) -> Dict[str, 
 def get_config_help(config_type: Optional[str] = None) -> str:
     """Get help text for configuration validation."""
     summary = _validator.get_validation_summary()
-    
+
     if config_type:
         if config_type not in summary:
             return f"Unknown configuration type: {config_type}"
-        
+
         info = summary[config_type]
         help_text = f"Configuration type: {config_type}\n"
         help_text += f"Description: {info['description']}\n\n"
         help_text += f"Example:\n{yaml.dump(info['example'], default_flow_style=False)}"
-        
+
         if "allowed_tools" in info:
             help_text += f"\nAllowed tools: {', '.join(info['allowed_tools'])}"
-        
+
         return help_text
     else:
         help_text = "Available configuration types:\n\n"
         for name, info in summary.items():
             help_text += f"- {name}: {info['description']}\n"
-        help_text += f"\nUse get_config_help('<type>') for detailed help on a specific type."
+        help_text += "\nUse get_config_help('<type>') for detailed help on a specific type."
         return help_text

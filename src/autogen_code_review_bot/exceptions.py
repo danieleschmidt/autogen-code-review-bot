@@ -72,3 +72,18 @@ class LinterError(ToolError):
 class SecurityError(AnalysisError):
     """Exception for security-related errors."""
     pass
+
+
+class CollaborationError(AnalysisError):
+    """Exception raised when collaboration features fail."""
+    pass
+
+
+class AuthenticationError(AnalysisError):
+    """Exception raised when authentication fails."""
+    pass
+
+
+class RateLimitError(AnalysisError):
+    """Exception raised when rate limits are exceeded."""
+    pass

@@ -1,19 +1,17 @@
 """Health monitoring and status checking for the AutoGen Code Review Bot."""
 
 import asyncio
-import json
+import subprocess
 import time
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Dict, List, Optional, Any, Callable
-from pathlib import Path
-import subprocess
+from typing import Any, Callable, Dict, List, Optional
+
 import psutil
 import redis
 
 from .logging_config import get_logger
-from .exceptions import ToolError, ExternalServiceError
 from .metrics import get_metrics_registry
 
 logger = get_logger(__name__)
@@ -23,7 +21,7 @@ metrics = get_metrics_registry()
 class HealthStatus(Enum):
     """Health check status levels."""
     HEALTHY = "healthy"
-    DEGRADED = "degraded" 
+    DEGRADED = "degraded"
     UNHEALTHY = "unhealthy"
     CRITICAL = "critical"
 
@@ -48,7 +46,7 @@ class HealthCheckResult:
 
 class HealthChecker:
     """Comprehensive health monitoring system."""
-    
+
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         """Initialize health checker with configuration.
         
@@ -58,7 +56,7 @@ class HealthChecker:
         self.config = config or {}
         self.checks: List[Callable] = []
         self._register_default_checks()
-        
+
     def _register_default_checks(self):
         """Register default health checks."""
         self.checks.extend([
@@ -69,7 +67,7 @@ class HealthChecker:
             self._check_cache_connectivity,
             self._check_github_connectivity,
         ])
-        
+
     async def run_all_checks(self, timeout: float = 30.0) -> Dict[str, Any]:
         """Run all registered health checks.
         
@@ -81,11 +79,11 @@ class HealthChecker:
         """
         start_time = time.time()
         results = []
-        
+
         # Run checks concurrently with timeout
         try:
             tasks = [
-                asyncio.wait_for(self._run_check_safely(check), timeout=5.0) 
+                asyncio.wait_for(self._run_check_safely(check), timeout=5.0)
                 for check in self.checks
             ]
             results = await asyncio.wait_for(
@@ -94,7 +92,7 @@ class HealthChecker:
             )
         except asyncio.TimeoutError:
             logger.warning("Health checks timed out", timeout=timeout)
-            
+
         # Process results and handle exceptions
         processed_results = []
         for i, result in enumerate(results):
@@ -108,15 +106,15 @@ class HealthChecker:
                 ))
             elif isinstance(result, HealthCheckResult):
                 processed_results.append(result)
-                
+
         # Calculate overall status
         overall_status = self._calculate_overall_status(processed_results)
         total_duration = (time.time() - start_time) * 1000
-        
+
         # Record metrics
         metrics.record_histogram("health_check_duration_ms", total_duration)
         metrics.record_counter("health_checks_total", 1, tags={"status": overall_status.value})
-        
+
         return {
             "status": overall_status.value,
             "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -130,7 +128,7 @@ class HealthChecker:
                 "critical": sum(1 for r in processed_results if r.status == HealthStatus.CRITICAL),
             }
         }
-    
+
     async def _run_check_safely(self, check_func: Callable) -> HealthCheckResult:
         """Run a single health check with error handling.
         
@@ -147,7 +145,7 @@ class HealthChecker:
                 result = await check_func()
             else:
                 result = check_func()
-            
+
             if not isinstance(result, HealthCheckResult):
                 # Convert basic results to HealthCheckResult
                 result = HealthCheckResult(
@@ -157,9 +155,9 @@ class HealthChecker:
                     duration_ms=(time.time() - start_time) * 1000,
                     timestamp=datetime.now(timezone.utc)
                 )
-                
+
             return result
-            
+
         except Exception as e:
             logger.error(f"Health check {check_func.__name__} failed", error=str(e))
             return HealthCheckResult(
@@ -169,7 +167,7 @@ class HealthChecker:
                 duration_ms=(time.time() - start_time) * 1000,
                 timestamp=datetime.now(timezone.utc)
             )
-    
+
     def _calculate_overall_status(self, results: List[HealthCheckResult]) -> HealthStatus:
         """Calculate overall health status from individual check results.
         
@@ -181,12 +179,12 @@ class HealthChecker:
         """
         if not results:
             return HealthStatus.UNHEALTHY
-            
+
         # Count status occurrences
         status_counts = {}
         for result in results:
             status_counts[result.status] = status_counts.get(result.status, 0) + 1
-            
+
         # Determine overall status based on worst case
         if status_counts.get(HealthStatus.CRITICAL, 0) > 0:
             return HealthStatus.CRITICAL
@@ -196,15 +194,15 @@ class HealthChecker:
             return HealthStatus.DEGRADED
         else:
             return HealthStatus.HEALTHY
-    
+
     def _check_memory_usage(self) -> HealthCheckResult:
         """Check system memory usage."""
         start_time = time.time()
-        
+
         try:
             memory = psutil.virtual_memory()
             memory_percent = memory.percent
-            
+
             # Determine status based on memory usage
             if memory_percent < 70:
                 status = HealthStatus.HEALTHY
@@ -215,7 +213,7 @@ class HealthChecker:
             else:
                 status = HealthStatus.UNHEALTHY
                 message = f"Memory usage critical: {memory_percent:.1f}%"
-                
+
             return HealthCheckResult(
                 name="memory_usage",
                 status=status,
@@ -228,7 +226,7 @@ class HealthChecker:
                     "memory_total": memory.total
                 }
             )
-            
+
         except Exception as e:
             return HealthCheckResult(
                 name="memory_usage",
@@ -237,15 +235,15 @@ class HealthChecker:
                 duration_ms=(time.time() - start_time) * 1000,
                 timestamp=datetime.now(timezone.utc)
             )
-    
+
     def _check_disk_space(self) -> HealthCheckResult:
         """Check disk space availability."""
         start_time = time.time()
-        
+
         try:
             disk = psutil.disk_usage('/')
             disk_percent = (disk.used / disk.total) * 100
-            
+
             if disk_percent < 80:
                 status = HealthStatus.HEALTHY
                 message = f"Disk usage normal: {disk_percent:.1f}%"
@@ -255,7 +253,7 @@ class HealthChecker:
             else:
                 status = HealthStatus.CRITICAL
                 message = f"Disk usage critical: {disk_percent:.1f}%"
-                
+
             return HealthCheckResult(
                 name="disk_space",
                 status=status,
@@ -268,7 +266,7 @@ class HealthChecker:
                     "disk_total": disk.total
                 }
             )
-            
+
         except Exception as e:
             return HealthCheckResult(
                 name="disk_space",
@@ -277,15 +275,15 @@ class HealthChecker:
                 duration_ms=(time.time() - start_time) * 1000,
                 timestamp=datetime.now(timezone.utc)
             )
-    
+
     def _check_cpu_usage(self) -> HealthCheckResult:
         """Check CPU usage."""
         start_time = time.time()
-        
+
         try:
             # Sample CPU usage over 1 second
             cpu_percent = psutil.cpu_percent(interval=1.0)
-            
+
             if cpu_percent < 70:
                 status = HealthStatus.HEALTHY
                 message = f"CPU usage normal: {cpu_percent:.1f}%"
@@ -295,7 +293,7 @@ class HealthChecker:
             else:
                 status = HealthStatus.UNHEALTHY
                 message = f"CPU usage high: {cpu_percent:.1f}%"
-                
+
             return HealthCheckResult(
                 name="cpu_usage",
                 status=status,
@@ -307,7 +305,7 @@ class HealthChecker:
                     "cpu_count": psutil.cpu_count()
                 }
             )
-            
+
         except Exception as e:
             return HealthCheckResult(
                 name="cpu_usage",
@@ -316,23 +314,23 @@ class HealthChecker:
                 duration_ms=(time.time() - start_time) * 1000,
                 timestamp=datetime.now(timezone.utc)
             )
-    
+
     def _check_required_tools(self) -> HealthCheckResult:
         """Check availability of required external tools."""
         start_time = time.time()
-        
+
         required_tools = ["git", "python3", "ruff", "bandit"]
         missing_tools = []
-        
+
         for tool in required_tools:
             try:
-                subprocess.run([tool, "--version"], 
-                             capture_output=True, 
-                             check=True, 
+                subprocess.run([tool, "--version"],
+                             capture_output=True,
+                             check=True,
                              timeout=5)
             except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
                 missing_tools.append(tool)
-        
+
         if not missing_tools:
             status = HealthStatus.HEALTHY
             message = "All required tools available"
@@ -342,7 +340,7 @@ class HealthChecker:
         else:
             status = HealthStatus.CRITICAL
             message = f"Critical tools missing: {', '.join(missing_tools)}"
-            
+
         return HealthCheckResult(
             name="required_tools",
             status=status,
@@ -355,11 +353,11 @@ class HealthChecker:
                 "available_tools": [t for t in required_tools if t not in missing_tools]
             }
         )
-    
+
     def _check_cache_connectivity(self) -> HealthCheckResult:
         """Check Redis cache connectivity."""
         start_time = time.time()
-        
+
         try:
             cache_config = self.config.get("cache", {})
             if not cache_config.get("enabled", True):
@@ -370,26 +368,26 @@ class HealthChecker:
                     duration_ms=(time.time() - start_time) * 1000,
                     timestamp=datetime.now(timezone.utc)
                 )
-            
+
             redis_url = cache_config.get("redis_url", "redis://localhost:6379")
             r = redis.from_url(redis_url, socket_timeout=5)
-            
+
             # Test connection with ping
             r.ping()
-            
+
             # Test basic operations
             test_key = "health_check_test"
             r.set(test_key, "test_value", ex=60)
             value = r.get(test_key)
             r.delete(test_key)
-            
+
             if value == b"test_value":
                 status = HealthStatus.HEALTHY
                 message = "Cache connectivity successful"
             else:
                 status = HealthStatus.DEGRADED
                 message = "Cache operations partially working"
-                
+
             return HealthCheckResult(
                 name="cache_connectivity",
                 status=status,
@@ -398,7 +396,7 @@ class HealthChecker:
                 timestamp=datetime.now(timezone.utc),
                 metadata={"redis_url": redis_url.split('@')[-1]}  # Hide credentials
             )
-            
+
         except Exception as e:
             return HealthCheckResult(
                 name="cache_connectivity",
@@ -407,25 +405,25 @@ class HealthChecker:
                 duration_ms=(time.time() - start_time) * 1000,
                 timestamp=datetime.now(timezone.utc)
             )
-    
+
     async def _check_github_connectivity(self) -> HealthCheckResult:
         """Check GitHub API connectivity."""
         start_time = time.time()
-        
+
         try:
             import aiohttp
-            
+
             github_config = self.config.get("github", {})
             api_url = github_config.get("api_url", "https://api.github.com")
             timeout = github_config.get("request_timeout", 10)
-            
+
             async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout)) as session:
                 async with session.get(f"{api_url}/rate_limit") as response:
                     if response.status == 200:
                         data = await response.json()
                         rate_limit = data.get("rate", {})
                         remaining = rate_limit.get("remaining", 0)
-                        
+
                         if remaining > 100:
                             status = HealthStatus.HEALTHY
                             message = f"GitHub API accessible, {remaining} requests remaining"
@@ -435,7 +433,7 @@ class HealthChecker:
                         else:
                             status = HealthStatus.UNHEALTHY
                             message = f"GitHub API rate limit critical: {remaining} requests remaining"
-                            
+
                         return HealthCheckResult(
                             name="github_connectivity",
                             status=status,
@@ -456,7 +454,7 @@ class HealthChecker:
                             duration_ms=(time.time() - start_time) * 1000,
                             timestamp=datetime.now(timezone.utc)
                         )
-                        
+
         except Exception as e:
             return HealthCheckResult(
                 name="github_connectivity",
