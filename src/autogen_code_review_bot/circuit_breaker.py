@@ -12,17 +12,16 @@ Features:
 - Integration with metrics and logging systems
 """
 
-import time
 import random
 import threading
-from dataclasses import dataclass, field
-from enum import Enum
-from typing import Callable, Any, Optional, Dict, Union
+import time
 from collections import deque
+from dataclasses import dataclass
+from enum import Enum
+from typing import Any, Callable, Dict, Optional, Union
 
-from .logging_utils import get_request_logger, RequestContext
+from .logging_utils import RequestContext, get_request_logger
 from .metrics import get_metrics_registry
-
 
 logger = get_request_logger(__name__)
 
@@ -55,7 +54,7 @@ class CircuitBreakerError(Exception):
 
 class CircuitBreaker:
     """Circuit breaker implementation with failure tracking and recovery."""
-    
+
     def __init__(self, name: str, config: Optional[CircuitBreakerConfig] = None):
         """Initialize circuit breaker.
         
@@ -70,10 +69,10 @@ class CircuitBreaker:
         self._success_count = 0
         self._last_failure_time = 0.0
         self._lock = threading.RLock()
-        
+
         # Track recent requests for failure rate calculation
         self._recent_requests: deque = deque(maxlen=self.config.monitoring_window)
-        
+
         # Metrics integration
         self._registry = get_metrics_registry()
         self._state_gauge = self._registry.gauge(
@@ -86,52 +85,52 @@ class CircuitBreaker:
             f"Total failures for circuit breaker {name}",
             labels=["circuit_breaker", "error_type"]
         )
-        
+
     @property
     def state(self) -> CircuitBreakerState:
         """Get current circuit breaker state."""
         with self._lock:
             return self._state
-            
+
     @property
     def failure_rate(self) -> float:
         """Calculate current failure rate from recent requests."""
         with self._lock:
             if not self._recent_requests:
                 return 0.0
-            
+
             failures = sum(1 for success in self._recent_requests if not success)
             return failures / len(self._recent_requests)
-            
+
     def _record_success(self):
         """Record a successful request."""
         with self._lock:
             self._recent_requests.append(True)
             self._success_count += 1
-            
+
             if self._state == CircuitBreakerState.HALF_OPEN:
                 if self._success_count >= self.config.success_threshold:
                     self._transition_to_closed()
-                    
+
     def _record_failure(self, error_type: str = "unknown"):
         """Record a failed request."""
         with self._lock:
             self._recent_requests.append(False)
             self._failure_count += 1
             self._last_failure_time = time.time()
-            
+
             # Record metrics
             self._failure_counter.increment(labels={
                 "circuit_breaker": self.name,
                 "error_type": error_type
             })
-            
+
             if self._state == CircuitBreakerState.CLOSED:
                 if self._failure_count >= self.config.failure_threshold:
                     self._transition_to_open()
             elif self._state == CircuitBreakerState.HALF_OPEN:
                 self._transition_to_open()
-                
+
     def _transition_to_closed(self):
         """Transition to CLOSED state."""
         with self._lock:
@@ -139,25 +138,25 @@ class CircuitBreaker:
             self._state = CircuitBreakerState.CLOSED
             self._failure_count = 0
             self._success_count = 0
-            
+
             self._state_gauge.set(0, {"circuit_breaker": self.name})
-            
+
             logger.info(
                 f"Circuit breaker '{self.name}' transitioned to CLOSED",
                 circuit_breaker=self.name,
                 old_state=old_state.value,
                 new_state=self._state.value
             )
-            
+
     def _transition_to_open(self):
         """Transition to OPEN state."""
         with self._lock:
             old_state = self._state
             self._state = CircuitBreakerState.OPEN
             self._success_count = 0
-            
+
             self._state_gauge.set(1, {"circuit_breaker": self.name})
-            
+
             logger.warning(
                 f"Circuit breaker '{self.name}' transitioned to OPEN",
                 circuit_breaker=self.name,
@@ -166,23 +165,23 @@ class CircuitBreaker:
                 failure_count=self._failure_count,
                 failure_rate=self.failure_rate
             )
-            
+
     def _transition_to_half_open(self):
-        """Transition to HALF_OPEN state.""" 
+        """Transition to HALF_OPEN state."""
         with self._lock:
             old_state = self._state
             self._state = CircuitBreakerState.HALF_OPEN
             self._success_count = 0
-            
+
             self._state_gauge.set(2, {"circuit_breaker": self.name})
-            
+
             logger.info(
                 f"Circuit breaker '{self.name}' transitioned to HALF_OPEN",
                 circuit_breaker=self.name,
                 old_state=old_state.value,
                 new_state=self._state.value
             )
-            
+
     def _should_allow_request(self) -> bool:
         """Check if request should be allowed based on current state."""
         with self._lock:
@@ -197,9 +196,9 @@ class CircuitBreaker:
             elif self._state == CircuitBreakerState.HALF_OPEN:
                 # Allow limited requests to test recovery
                 return True
-            
+
             return False
-            
+
     def call(self, func: Callable, *args, context: Optional[RequestContext] = None, **kwargs) -> Any:
         """Execute function with circuit breaker protection.
         
@@ -220,7 +219,7 @@ class CircuitBreaker:
             raise CircuitBreakerError(
                 f"Circuit breaker '{self.name}' is OPEN, request blocked"
             )
-            
+
         try:
             result = func(*args, **kwargs)
             self._record_success()
@@ -228,7 +227,7 @@ class CircuitBreaker:
         except Exception as e:
             error_type = type(e).__name__
             self._record_failure(error_type)
-            
+
             if context:
                 logger.warning(
                     f"Circuit breaker '{self.name}' recorded failure",
@@ -238,9 +237,9 @@ class CircuitBreaker:
                     failure_count=self._failure_count,
                     state=self._state.value
                 )
-            
+
             raise
-            
+
     def get_stats(self) -> Dict[str, Union[str, int, float]]:
         """Get circuit breaker statistics.
         
@@ -262,7 +261,7 @@ class CircuitBreaker:
 
 class RetryStrategy:
     """Advanced retry strategy with exponential backoff and jitter."""
-    
+
     def __init__(self, config: CircuitBreakerConfig):
         """Initialize retry strategy.
         
@@ -270,7 +269,7 @@ class RetryStrategy:
             config: Circuit breaker configuration.
         """
         self.config = config
-        
+
     def calculate_delay(self, attempt: int, retry_after: Optional[float] = None) -> float:
         """Calculate delay for retry attempt.
         
@@ -284,16 +283,16 @@ class RetryStrategy:
         if retry_after is not None:
             # Respect server-provided retry delay
             return retry_after
-            
+
         # Exponential backoff with jitter
         base_delay = self.config.base_delay * (2 ** attempt)
         max_delay = min(base_delay, self.config.max_delay)
-        
+
         # Add jitter to prevent thundering herd
         jitter = max_delay * self.config.jitter_factor * random.random()
-        
+
         return max_delay + jitter
-        
+
     def should_retry(self, attempt: int, error: Exception) -> bool:
         """Determine if request should be retried.
         
@@ -306,25 +305,25 @@ class RetryStrategy:
         """
         if attempt >= self.config.max_retries:
             return False
-            
+
         # Import here to avoid circular import
         import requests
-        
+
         # Don't retry on authentication errors
         if isinstance(error, requests.HTTPError):
             if hasattr(error, 'response') and error.response.status_code in [401, 403]:
                 return False
-                
+
             # Don't retry on client errors (except rate limits)
             if hasattr(error, 'response') and 400 <= error.response.status_code < 500:
                 return error.response.status_code == 429  # Retry on rate limits
-                
+
         # Retry on network errors and server errors
         if isinstance(error, (requests.ConnectionError, requests.Timeout, requests.HTTPError)):
             return True
-            
+
         return False
-        
+
     def extract_retry_after(self, response) -> Optional[float]:
         """Extract Retry-After value from response headers.
         
@@ -336,7 +335,7 @@ class RetryStrategy:
         """
         if not hasattr(response, 'headers'):
             return None
-            
+
         retry_after = response.headers.get('Retry-After')
         if retry_after:
             try:
@@ -344,7 +343,7 @@ class RetryStrategy:
             except ValueError:
                 # Retry-After can be a date, but we'll just use default delay
                 pass
-                
+
         # Check for GitHub-specific rate limit headers
         reset_time = response.headers.get('X-RateLimit-Reset')
         if reset_time:
@@ -354,7 +353,7 @@ class RetryStrategy:
                 return delay
             except ValueError:
                 pass
-                
+
         return None
 
 

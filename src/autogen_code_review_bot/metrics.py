@@ -16,13 +16,12 @@ Key features:
 import json
 import threading
 import time
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Union, Any, Callable
 from collections import defaultdict
+from dataclasses import dataclass, field
 from functools import wraps
+from typing import Dict, List, Optional, Union
 
 from .logging_utils import RequestContext, get_request_logger
-
 
 logger = get_request_logger(__name__)
 
@@ -44,7 +43,7 @@ class MetricSample:
 
 class BaseMetric:
     """Base class for all metrics."""
-    
+
     def __init__(self, name: str, description: str, labels: Optional[List[str]] = None):
         """Initialize base metric.
         
@@ -57,7 +56,7 @@ class BaseMetric:
         self.description = description
         self.labels = labels or []
         self._lock = threading.RLock()
-        
+
     def _validate_labels(self, labels: Optional[Dict[str, str]]) -> Dict[str, str]:
         """Validate and normalize labels.
         
@@ -69,28 +68,28 @@ class BaseMetric:
         """
         if labels is None:
             return {}
-            
+
         if not isinstance(labels, dict):
             raise ValueError("Labels must be a dictionary")
-            
+
         # Ensure all label values are strings
         return {str(k): str(v) for k, v in labels.items()}
 
 
 class Counter(BaseMetric):
     """Counter metric that only increases."""
-    
+
     def __init__(self, name: str, description: str, labels: Optional[List[str]] = None):
         """Initialize counter metric."""
         super().__init__(name, description, labels)
         self._values: Dict[tuple, int] = defaultdict(int)
-        
+
     @property
     def value(self) -> int:
         """Get total value across all label combinations."""
         with self._lock:
             return sum(self._values.values())
-            
+
     def increment(self, value: int = 1, labels: Optional[Dict[str, str]] = None) -> None:
         """Increment counter.
         
@@ -100,13 +99,13 @@ class Counter(BaseMetric):
         """
         if value < 0:
             raise ValueError("Counter can only be incremented with positive values")
-            
+
         labels = self._validate_labels(labels)
         label_key = tuple(sorted(labels.items()))
-        
+
         with self._lock:
             self._values[label_key] += value
-            
+
     def get_value(self, labels: Optional[Dict[str, str]] = None) -> int:
         """Get value for specific label combination.
         
@@ -118,10 +117,10 @@ class Counter(BaseMetric):
         """
         labels = self._validate_labels(labels)
         label_key = tuple(sorted(labels.items()))
-        
+
         with self._lock:
             return self._values[label_key]
-            
+
     def get_all_samples(self) -> List[MetricSample]:
         """Get all samples with their labels.
         
@@ -138,18 +137,18 @@ class Counter(BaseMetric):
 
 class Gauge(BaseMetric):
     """Gauge metric that can increase or decrease."""
-    
+
     def __init__(self, name: str, description: str, labels: Optional[List[str]] = None):
         """Initialize gauge metric."""
         super().__init__(name, description, labels)
         self._values: Dict[tuple, float] = defaultdict(float)
-        
+
     @property
     def value(self) -> float:
         """Get current value (sum across all label combinations)."""
         with self._lock:
             return sum(self._values.values())
-            
+
     def set(self, value: Union[int, float], labels: Optional[Dict[str, str]] = None) -> None:
         """Set gauge value.
         
@@ -159,10 +158,10 @@ class Gauge(BaseMetric):
         """
         labels = self._validate_labels(labels)
         label_key = tuple(sorted(labels.items()))
-        
+
         with self._lock:
             self._values[label_key] = float(value)
-            
+
     def increment(self, value: Union[int, float] = 1, labels: Optional[Dict[str, str]] = None) -> None:
         """Increment gauge value.
         
@@ -172,10 +171,10 @@ class Gauge(BaseMetric):
         """
         labels = self._validate_labels(labels)
         label_key = tuple(sorted(labels.items()))
-        
+
         with self._lock:
             self._values[label_key] += value
-            
+
     def decrement(self, value: Union[int, float] = 1, labels: Optional[Dict[str, str]] = None) -> None:
         """Decrement gauge value.
         
@@ -184,7 +183,7 @@ class Gauge(BaseMetric):
             labels: Labels for this decrement.
         """
         self.increment(-value, labels)
-        
+
     def get_value(self, labels: Optional[Dict[str, str]] = None) -> float:
         """Get value for specific label combination.
         
@@ -196,10 +195,10 @@ class Gauge(BaseMetric):
         """
         labels = self._validate_labels(labels)
         label_key = tuple(sorted(labels.items()))
-        
+
         with self._lock:
             return self._values[label_key]
-            
+
     def get_all_samples(self) -> List[MetricSample]:
         """Get all samples with their labels.
         
@@ -216,10 +215,10 @@ class Gauge(BaseMetric):
 
 class Histogram(BaseMetric):
     """Histogram metric for tracking distributions."""
-    
+
     DEFAULT_BUCKETS = [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, float('inf')]
-    
-    def __init__(self, name: str, description: str, buckets: Optional[List[float]] = None, 
+
+    def __init__(self, name: str, description: str, buckets: Optional[List[float]] = None,
                  labels: Optional[List[str]] = None):
         """Initialize histogram metric.
         
@@ -234,19 +233,19 @@ class Histogram(BaseMetric):
         self._counts: Dict[tuple, Dict[float, int]] = defaultdict(lambda: defaultdict(int))
         self._sums: Dict[tuple, float] = defaultdict(float)
         self._observation_counts: Dict[tuple, int] = defaultdict(int)
-        
+
     @property
     def count(self) -> int:
         """Get total number of observations."""
         with self._lock:
             return sum(self._observation_counts.values())
-            
+
     @property
     def sum(self) -> float:
         """Get sum of all observed values."""
         with self._lock:
             return sum(self._sums.values())
-            
+
     def observe(self, value: float, labels: Optional[Dict[str, str]] = None) -> None:
         """Observe a value.
         
@@ -256,17 +255,17 @@ class Histogram(BaseMetric):
         """
         labels = self._validate_labels(labels)
         label_key = tuple(sorted(labels.items()))
-        
+
         with self._lock:
             # Update sum and count
             self._sums[label_key] += value
             self._observation_counts[label_key] += 1
-            
+
             # Update bucket counts
             for bucket in self.buckets:
                 if value <= bucket:
                     self._counts[label_key][bucket] += 1
-                    
+
     def get_bucket_counts(self, labels: Optional[Dict[str, str]] = None) -> Dict[float, int]:
         """Get bucket counts for specific labels.
         
@@ -278,10 +277,10 @@ class Histogram(BaseMetric):
         """
         labels = self._validate_labels(labels)
         label_key = tuple(sorted(labels.items()))
-        
+
         with self._lock:
             return dict(self._counts[label_key])
-            
+
     def get_all_samples(self) -> List[MetricSample]:
         """Get all samples including bucket counts.
         
@@ -290,10 +289,10 @@ class Histogram(BaseMetric):
         """
         with self._lock:
             samples = []
-            
+
             for label_key in self._observation_counts.keys():
                 labels = dict(label_key)
-                
+
                 # Add count and sum samples
                 samples.append(MetricSample(
                     value=self._observation_counts[label_key],
@@ -303,7 +302,7 @@ class Histogram(BaseMetric):
                     value=self._sums[label_key],
                     labels={**labels, "type": "sum"}
                 ))
-                
+
                 # Add bucket samples
                 for bucket, count in self._counts[label_key].items():
                     bucket_labels = {**labels, "le": str(bucket)}
@@ -311,13 +310,13 @@ class Histogram(BaseMetric):
                         value=count,
                         labels=bucket_labels
                     ))
-                    
+
             return samples
 
 
 class Timer:
     """Utility for timing operations and recording to histogram."""
-    
+
     def __init__(self, histogram: Histogram, labels: Optional[Dict[str, str]] = None):
         """Initialize timer.
         
@@ -328,18 +327,18 @@ class Timer:
         self.histogram = histogram
         self.labels = labels
         self.start_time: Optional[float] = None
-        
+
     def __enter__(self):
         """Start timing."""
         self.start_time = time.time()
         return self
-        
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Stop timing and record."""
         if self.start_time is not None:
             duration = time.time() - self.start_time
             self.histogram.observe(duration, self.labels)
-            
+
     @classmethod
     def decorator(cls, histogram: Histogram, labels: Optional[Dict[str, str]] = None):
         """Create a decorator for timing functions.
@@ -362,12 +361,12 @@ class Timer:
 
 class MetricsRegistry:
     """Central registry for all metrics."""
-    
+
     def __init__(self):
         """Initialize metrics registry."""
         self._metrics: Dict[str, BaseMetric] = {}
         self._lock = threading.RLock()
-        
+
     def counter(self, name: str, description: str, labels: Optional[List[str]] = None) -> Counter:
         """Get or create a counter metric.
         
@@ -385,11 +384,11 @@ class MetricsRegistry:
                 if not isinstance(metric, Counter):
                     raise ValueError(f"Metric {name} already exists as {type(metric).__name__}")
                 return metric
-                
+
             counter = Counter(name, description, labels)
             self._metrics[name] = counter
             return counter
-            
+
     def gauge(self, name: str, description: str, labels: Optional[List[str]] = None) -> Gauge:
         """Get or create a gauge metric.
         
@@ -407,11 +406,11 @@ class MetricsRegistry:
                 if not isinstance(metric, Gauge):
                     raise ValueError(f"Metric {name} already exists as {type(metric).__name__}")
                 return metric
-                
+
             gauge = Gauge(name, description, labels)
             self._metrics[name] = gauge
             return gauge
-            
+
     def histogram(self, name: str, description: str, buckets: Optional[List[float]] = None,
                   labels: Optional[List[str]] = None) -> Histogram:
         """Get or create a histogram metric.
@@ -431,11 +430,11 @@ class MetricsRegistry:
                 if not isinstance(metric, Histogram):
                     raise ValueError(f"Metric {name} already exists as {type(metric).__name__}")
                 return metric
-                
+
             histogram = Histogram(name, description, buckets, labels)
             self._metrics[name] = histogram
             return histogram
-            
+
     def get_metric(self, name: str) -> Optional[BaseMetric]:
         """Get metric by name.
         
@@ -447,7 +446,7 @@ class MetricsRegistry:
         """
         with self._lock:
             return self._metrics.get(name)
-            
+
     def get_all_metrics(self) -> Dict[str, BaseMetric]:
         """Get all registered metrics.
         
@@ -460,7 +459,7 @@ class MetricsRegistry:
 
 class MetricsExporter:
     """Base class for metrics exporters."""
-    
+
     def export(self, registry: MetricsRegistry) -> str:
         """Export metrics from registry.
         
@@ -475,7 +474,7 @@ class MetricsExporter:
 
 class JSONExporter(MetricsExporter):
     """JSON metrics exporter."""
-    
+
     def export(self, registry: MetricsRegistry) -> str:
         """Export metrics in JSON format.
         
@@ -486,7 +485,7 @@ class JSONExporter(MetricsExporter):
             JSON string of metrics.
         """
         metrics_data = {}
-        
+
         for name, metric in registry.get_all_metrics().items():
             metric_info = {
                 "name": metric.name,
@@ -494,7 +493,7 @@ class JSONExporter(MetricsExporter):
                 "type": type(metric).__name__.lower(),
                 "samples": []
             }
-            
+
             if isinstance(metric, (Counter, Gauge)):
                 metric_info["value"] = metric.value
                 for sample in metric.get_all_samples():
@@ -513,15 +512,15 @@ class JSONExporter(MetricsExporter):
                         "labels": sample.labels,
                         "timestamp": sample.timestamp
                     })
-                    
+
             metrics_data[name] = metric_info
-            
+
         return json.dumps(metrics_data, indent=2)
 
 
 class PrometheusExporter(MetricsExporter):
     """Prometheus metrics exporter."""
-    
+
     def export(self, registry: MetricsRegistry) -> str:
         """Export metrics in Prometheus format.
         
@@ -532,23 +531,23 @@ class PrometheusExporter(MetricsExporter):
             Prometheus format string.
         """
         lines = []
-        
+
         for name, metric in registry.get_all_metrics().items():
             # Add help and type comments
             lines.append(f"# HELP {name} {metric.description}")
-            
+
             if isinstance(metric, Counter):
                 lines.append(f"# TYPE {name} counter")
                 for sample in metric.get_all_samples():
                     labels_str = self._format_labels(sample.labels)
                     lines.append(f"{name}{labels_str} {sample.value}")
-                    
+
             elif isinstance(metric, Gauge):
                 lines.append(f"# TYPE {name} gauge")
                 for sample in metric.get_all_samples():
                     labels_str = self._format_labels(sample.labels)
                     lines.append(f"{name}{labels_str} {sample.value}")
-                    
+
             elif isinstance(metric, Histogram):
                 lines.append(f"# TYPE {name} histogram")
                 for sample in metric.get_all_samples():
@@ -564,9 +563,9 @@ class PrometheusExporter(MetricsExporter):
                     elif "le" in sample.labels:
                         labels_str = self._format_labels(sample.labels)
                         lines.append(f"{name}_bucket{labels_str} {sample.value}")
-                        
+
         return "\n".join(lines) + "\n"
-        
+
     def _format_labels(self, labels: Dict[str, str]) -> str:
         """Format labels for Prometheus format.
         
@@ -578,13 +577,13 @@ class PrometheusExporter(MetricsExporter):
         """
         if not labels:
             return ""
-            
+
         formatted_labels = []
         for key, value in sorted(labels.items()):
             # Escape quotes in values
             escaped_value = str(value).replace('"', '\\"')
             formatted_labels.append(f'{key}="{escaped_value}"')
-            
+
         return "{" + ",".join(formatted_labels) + "}"
 
 
@@ -600,7 +599,7 @@ def get_metrics_registry() -> MetricsRegistry:
         Global metrics registry instance.
     """
     global _global_registry
-    
+
     with _registry_lock:
         if _global_registry is None:
             _global_registry = MetricsRegistry()
@@ -618,7 +617,7 @@ def record_operation_metrics(operation: str, duration_ms: float, status: str = "
         context: Request context for correlation.
     """
     registry = get_metrics_registry()
-    
+
     # Record operation duration
     duration_histogram = registry.histogram(
         "operation_duration_seconds",
@@ -629,7 +628,7 @@ def record_operation_metrics(operation: str, duration_ms: float, status: str = "
         "operation": operation,
         "status": status
     })
-    
+
     # Record operation count
     operation_counter = registry.counter(
         "operation_total",
@@ -640,7 +639,7 @@ def record_operation_metrics(operation: str, duration_ms: float, status: str = "
         "operation": operation,
         "status": status
     })
-    
+
     # Log metrics with context
     if context:
         logger.info(
@@ -667,22 +666,22 @@ def with_metrics(operation: str, labels: Optional[Dict[str, str]] = None):
         def wrapper(*args, **kwargs):
             start_time = time.time()
             status = "success"
-            
+
             try:
                 result = func(*args, **kwargs)
                 return result
-            except Exception as e:
+            except Exception:
                 status = "error"
                 raise
             finally:
                 duration_ms = (time.time() - start_time) * 1000
-                
+
                 # Merge labels
                 final_labels = labels.copy() if labels else {}
                 final_labels.update({"operation": operation, "status": status})
-                
+
                 record_operation_metrics(operation, duration_ms, status)
-                
+
         return wrapper
     return decorator
 

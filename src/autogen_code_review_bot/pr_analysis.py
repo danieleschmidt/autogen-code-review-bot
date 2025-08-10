@@ -6,27 +6,18 @@ This module provides the main analysis functionality for pull requests,
 integrating multiple linting tools, security scanners, and AI agents.
 """
 
-import os
-import sys
-import json
-import yaml
-import subprocess
-import tempfile
-import hashlib
-import concurrent.futures
-from typing import Dict, List, Optional, Tuple, Any, Union
-from pathlib import Path
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from datetime import datetime, timezone
+from pathlib import Path
+from typing import Optional
 
-from .models import PRAnalysisResult, AnalysisSection
-from .language_detection import detect_language
-from .agents import run_dual_review, load_agents_from_yaml
-from .caching import LinterCache
+import yaml
+
+from .agents import load_agents_from_yaml, run_dual_review
+from .exceptions import AnalysisError
 from .logging_config import get_logger
-from .metrics import record_operation_metrics, get_metrics_registry
-from .exceptions import AnalysisError, LinterError, SecurityError
-from .subprocess_security import safe_subprocess_run
+from .metrics import get_metrics_registry
+from .models import AnalysisSection, PRAnalysisResult
 
 logger = get_logger(__name__)
 metrics = get_metrics_registry()
@@ -47,21 +38,21 @@ class LinterConfig:
     swift: str = "swiftlint"
     kotlin: str = "ktlint"
     scala: str = "scalastyle"
-    
+
     @classmethod
     def from_yaml(cls, yaml_path: str) -> 'LinterConfig':
         """Load linter configuration from YAML file."""
         if not Path(yaml_path).exists():
             raise FileNotFoundError(f"Linter config file not found: {yaml_path}")
-        
-        with open(yaml_path, 'r') as f:
+
+        with open(yaml_path) as f:
             data = yaml.safe_load(f)
-        
+
         linters = data.get('linters', {})
         return cls(**{k: v for k, v in linters.items() if hasattr(cls, k)})
 
 
-def analyze_pr(repo_path: str, 
+def analyze_pr(repo_path: str,
                config_path: Optional[str] = None,
                use_cache: bool = True,
                use_parallel: bool = True) -> PRAnalysisResult:
@@ -78,7 +69,7 @@ def analyze_pr(repo_path: str,
         PRAnalysisResult with analysis sections
     """
     start_time = datetime.now(timezone.utc)
-    
+
     try:
         logger.info("Starting PR analysis", extra={
             "repo_path": repo_path,
@@ -86,26 +77,26 @@ def analyze_pr(repo_path: str,
             "use_cache": use_cache,
             "use_parallel": use_parallel
         })
-        
+
         # Simple implementation for Generation 1
         security_result = AnalysisSection(
             tool="security-scanner",
             output="Security analysis completed - no critical issues found",
             metadata={"severity": "low"}
         )
-        
+
         style_result = AnalysisSection(
-            tool="style-analyzer", 
+            tool="style-analyzer",
             output="Style analysis completed - following best practices",
             metadata={"issues_count": 0}
         )
-        
+
         performance_result = AnalysisSection(
             tool="performance-analyzer",
-            output="Performance analysis completed - no bottlenecks detected", 
+            output="Performance analysis completed - no bottlenecks detected",
             metadata={"hotspots": 0}
         )
-        
+
         # Create analysis result
         result = PRAnalysisResult(
             security=security_result,
@@ -119,13 +110,13 @@ def analyze_pr(repo_path: str,
                 "parallel_execution": use_parallel
             }
         )
-        
+
         logger.info("PR analysis completed successfully", extra={
             "duration_seconds": result.metadata["analysis_duration"]
         })
-        
+
         return result
-        
+
     except Exception as e:
         logger.error(f"PR analysis failed: {e}")
         raise AnalysisError(f"PR analysis failed: {e}")
@@ -138,7 +129,7 @@ def load_linter_config(config_path: Optional[str] = None) -> LinterConfig:
             return LinterConfig.from_yaml(config_path)
         except Exception as e:
             logger.warning(f"Failed to load linter config {config_path}: {e}")
-    
+
     return LinterConfig()
 
 
@@ -147,7 +138,7 @@ def format_analysis_with_agents(result: PRAnalysisResult, agent_config_path: str
     try:
         # Load agents from configuration
         agents = load_agents_from_yaml(agent_config_path)
-        
+
         # Prepare analysis summary for agents
         analysis_summary = f"""
 === SECURITY ANALYSIS ===
@@ -162,10 +153,10 @@ Tool: {result.style.tool}
 Tool: {result.performance.tool}
 {result.performance.output}
 """
-        
+
         # Run dual agent review
         agent_feedback = run_dual_review(analysis_summary, agents['coder'], agents['reviewer'])
-        
+
         # Format final output
         return f"""
 # 🤖 AutoGen Code Review Results
@@ -188,7 +179,7 @@ Tool: {result.performance.tool}
 ### ⚡ Performance Analysis ({result.performance.tool})
 {result.performance.output}
 """
-        
+
     except Exception as e:
         logger.error(f"Agent formatting failed: {e}")
         # Fallback to standard formatting
