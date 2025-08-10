@@ -1,12 +1,12 @@
 """Configurable response templates for code review agents."""
 
-from typing import Dict, List
 import random
+from typing import Dict, List
 
 
 class AgentResponseTemplates:
     """Manages response templates for different agent types."""
-    
+
     def __init__(self):
         """Initialize with default templates."""
         self._templates = {
@@ -51,7 +51,7 @@ class AgentResponseTemplates:
                 ]
             }
         }
-        
+
         self._substitution_options = {
             "focus_area": ["performance", "error handling", "edge cases", "security", "maintainability", "readability", "testing", "scalability"],
             "assessment_result": ["looks solid", "needs refactoring", "has potential issues", "shows good practices", "could be improved", "demonstrates clear logic"],
@@ -60,7 +60,7 @@ class AgentResponseTemplates:
             "finding_type": ["good practices", "areas for improvement", "security concerns", "performance issues", "code quality improvements", "architectural considerations"],
             "opinion_type": ["concur", "have reservations", "strongly support", "have mixed feelings", "am optimistic", "see potential issues"]
         }
-    
+
     def get_response(self, agent_type: str, template_category: str, **kwargs) -> str:
         """Get a response from templates with substitutions.
         
@@ -77,29 +77,29 @@ class AgentResponseTemplates:
         """
         if agent_type not in self._templates:
             raise ValueError(f"Unknown agent type: {agent_type}")
-        
+
         agent_templates = self._templates[agent_type]
         if template_category not in agent_templates:
             raise ValueError(f"Unknown template category '{template_category}' for agent '{agent_type}'")
-        
+
         # Select a random template from the category
         template = random.choice(agent_templates[template_category])
-        
+
         # Prepare substitutions
         substitutions = kwargs.copy()
-        
+
         # Add random substitutions for any placeholders not provided
         for placeholder, options in self._substitution_options.items():
             if placeholder not in substitutions:
                 substitutions[placeholder] = random.choice(options)
-        
+
         # Apply substitutions
         try:
             return template.format(**substitutions)
         except KeyError as e:
             # If substitution fails, return template with a fallback
             return template.replace(f"{{{e.args[0]}}}", f"[{e.args[0]}]")
-    
+
     def add_template(self, agent_type: str, template_category: str, template: str):
         """Add a new template to the collection.
         
@@ -110,12 +110,12 @@ class AgentResponseTemplates:
         """
         if agent_type not in self._templates:
             self._templates[agent_type] = {}
-        
+
         if template_category not in self._templates[agent_type]:
             self._templates[agent_type][template_category] = []
-        
+
         self._templates[agent_type][template_category].append(template)
-    
+
     def add_substitution_option(self, placeholder: str, option: str):
         """Add a new substitution option for a placeholder.
         
@@ -125,10 +125,10 @@ class AgentResponseTemplates:
         """
         if placeholder not in self._substitution_options:
             self._substitution_options[placeholder] = []
-        
+
         if option not in self._substitution_options[placeholder]:
             self._substitution_options[placeholder].append(option)
-    
+
     def load_from_config(self, config: Dict):
         """Load templates from configuration dictionary.
         
@@ -137,10 +137,10 @@ class AgentResponseTemplates:
         """
         if "templates" in config:
             self._templates.update(config["templates"])
-        
+
         if "substitution_options" in config:
             self._substitution_options.update(config["substitution_options"])
-    
+
     def get_available_templates(self) -> Dict[str, List[str]]:
         """Get available template categories for each agent type.
         
@@ -151,7 +151,7 @@ class AgentResponseTemplates:
             agent_type: list(templates.keys())
             for agent_type, templates in self._templates.items()
         }
-    
+
     def get_substitution_options(self) -> Dict[str, List[str]]:
         """Get available substitution options.
         

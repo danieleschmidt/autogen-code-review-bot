@@ -1,17 +1,16 @@
 """Rate limiting and throttling implementation for API endpoints."""
 
+import hashlib
 import time
-import asyncio
 from collections import defaultdict, deque
 from dataclasses import dataclass
-from typing import Dict, Optional, Tuple, Union
 from threading import Lock
-import redis
-import hashlib
-import json
+from typing import Dict, Optional, Union
 
-from .logging_config import get_logger
+import redis
+
 from .exceptions import ValidationError
+from .logging_config import get_logger
 from .metrics import get_metrics_registry
 
 logger = get_logger(__name__)
@@ -24,7 +23,7 @@ class RateLimitConfig:
     requests: int  # Number of requests allowed
     window: int    # Time window in seconds
     burst: Optional[int] = None  # Burst limit (defaults to requests)
-    
+
     def __post_init__(self):
         if self.burst is None:
             self.burst = self.requests
@@ -32,7 +31,7 @@ class RateLimitConfig:
 
 class RateLimitResult:
     """Result of a rate limit check."""
-    
+
     def __init__(self, allowed: bool, remaining: int, reset_time: int, retry_after: Optional[int] = None):
         self.allowed = allowed
         self.remaining = remaining
@@ -42,11 +41,11 @@ class RateLimitResult:
 
 class InMemoryRateLimiter:
     """In-memory rate limiter using sliding window algorithm."""
-    
+
     def __init__(self):
         self._requests: Dict[str, deque] = defaultdict(deque)
         self._lock = Lock()
-    
+
     def check_limit(self, key: str, config: RateLimitConfig) -> RateLimitResult:
         """Check if request is within rate limit.
         
@@ -59,37 +58,37 @@ class InMemoryRateLimiter:
         """
         current_time = time.time()
         window_start = current_time - config.window
-        
+
         with self._lock:
             # Clean old requests outside the window
             request_times = self._requests[key]
             while request_times and request_times[0] < window_start:
                 request_times.popleft()
-            
+
             # Check if we're within limits
             if len(request_times) >= config.requests:
                 # Find when the oldest request in window will expire
                 oldest_request = request_times[0]
                 retry_after = int(oldest_request + config.window - current_time) + 1
-                
+
                 metrics.record_counter("rate_limit_exceeded_total", 1, tags={"key": key[:10]})
-                
+
                 return RateLimitResult(
                     allowed=False,
                     remaining=0,
                     reset_time=int(oldest_request + config.window),
                     retry_after=retry_after
                 )
-            
+
             # Allow request and record it
             request_times.append(current_time)
             remaining = config.requests - len(request_times)
-            
+
             # Calculate reset time (when oldest request expires)
             reset_time = int(request_times[0] + config.window) if request_times else int(current_time + config.window)
-            
+
             metrics.record_counter("rate_limit_requests_total", 1, tags={"key": key[:10], "status": "allowed"})
-            
+
             return RateLimitResult(
                 allowed=True,
                 remaining=remaining,
@@ -99,12 +98,12 @@ class InMemoryRateLimiter:
 
 class RedisRateLimiter:
     """Redis-based distributed rate limiter using sliding window algorithm."""
-    
+
     def __init__(self, redis_client: redis.Redis):
         self.redis = redis_client
         self._script_sha: Optional[str] = None
         self._load_lua_script()
-    
+
     def _load_lua_script(self):
         """Load Lua script for atomic rate limiting operations."""
         script = """
@@ -139,13 +138,13 @@ class RedisRateLimiter:
             return {1, remaining, reset_time, 0}
         end
         """
-        
+
         try:
             self._script_sha = self.redis.script_load(script)
         except Exception as e:
             logger.error("Failed to load rate limiting Lua script", error=str(e))
             self._script_sha = None
-    
+
     def check_limit(self, key: str, config: RateLimitConfig) -> RateLimitResult:
         """Check if request is within rate limit using Redis.
         
@@ -159,7 +158,7 @@ class RedisRateLimiter:
         try:
             current_time = time.time()
             redis_key = f"rate_limit:{key}"
-            
+
             if self._script_sha:
                 # Use Lua script for atomic operation
                 result = self.redis.evalsha(
@@ -170,28 +169,28 @@ class RedisRateLimiter:
                     config.requests,
                     current_time
                 )
-                
+
                 allowed = bool(result[0])
                 remaining = int(result[1])
                 reset_time = int(result[2])
                 retry_after = int(result[3]) if result[3] > 0 else None
-                
+
             else:
                 # Fallback to individual Redis commands (less atomic)
                 with self.redis.pipeline() as pipe:
                     pipe.zremrangebyscore(redis_key, '-inf', current_time - config.window)
                     pipe.zcard(redis_key)
                     pipe.execute()
-                    
+
                     current_count = pipe.zcard(redis_key)
-                    
+
                     if current_count >= config.requests:
                         # Get oldest entry for retry calculation
                         oldest = pipe.zrange(redis_key, 0, 0, withscores=True)
                         retry_after = None
                         if oldest:
                             retry_after = int((oldest[0][1] + config.window) - current_time) + 1
-                        
+
                         allowed = False
                         remaining = 0
                         reset_time = int(current_time + config.window)
@@ -199,21 +198,21 @@ class RedisRateLimiter:
                         pipe.zadd(redis_key, {current_time: current_time})
                         pipe.expire(redis_key, config.window + 1)
                         pipe.execute()
-                        
+
                         allowed = True
                         remaining = config.requests - current_count - 1
                         reset_time = int(current_time + config.window)
                         retry_after = None
-            
+
             # Record metrics
             status = "allowed" if allowed else "denied"
             metrics.record_counter("rate_limit_requests_total", 1, tags={"key": key[:10], "status": status})
-            
+
             if not allowed:
                 metrics.record_counter("rate_limit_exceeded_total", 1, tags={"key": key[:10]})
-            
+
             return RateLimitResult(allowed, remaining, reset_time, retry_after)
-            
+
         except Exception as e:
             logger.error("Redis rate limiter error, allowing request", error=str(e))
             # Fail open - allow request if Redis is unavailable
@@ -226,12 +225,12 @@ class RedisRateLimiter:
 
 class AdaptiveRateLimiter:
     """Adaptive rate limiter that adjusts limits based on system load."""
-    
+
     def __init__(self, base_limiter: Union[InMemoryRateLimiter, RedisRateLimiter]):
         self.base_limiter = base_limiter
         self._load_metrics = deque(maxlen=60)  # Track load for last 60 checks
         self._last_adjustment = 0
-    
+
     def check_limit(self, key: str, config: RateLimitConfig, system_load: Optional[float] = None) -> RateLimitResult:
         """Check rate limit with adaptive adjustment based on system load.
         
@@ -250,14 +249,14 @@ class AdaptiveRateLimiter:
                 system_load = psutil.cpu_percent(interval=0.1) / 100.0
             except ImportError:
                 system_load = 0.5  # Default to moderate load
-        
+
         # Track load metrics
         self._load_metrics.append(system_load)
-        
+
         # Calculate adjustment factor based on recent load
         if len(self._load_metrics) >= 10:  # Need sufficient data
             avg_load = sum(self._load_metrics) / len(self._load_metrics)
-            
+
             # Adjust limits based on load (reduce under high load)
             if avg_load > 0.8:
                 adjustment = 0.5  # Reduce to 50% under high load
@@ -265,18 +264,18 @@ class AdaptiveRateLimiter:
                 adjustment = 0.75  # Reduce to 75% under moderate load
             else:
                 adjustment = 1.0  # No adjustment under low load
-            
+
             adjusted_requests = max(1, int(config.requests * adjustment))
             adjusted_config = RateLimitConfig(
                 requests=adjusted_requests,
                 window=config.window,
                 burst=config.burst
             )
-            
+
             # Log adjustments
             if adjusted_requests != config.requests:
                 logger.info(
-                    "Adaptive rate limit adjustment", 
+                    "Adaptive rate limit adjustment",
                     original_limit=config.requests,
                     adjusted_limit=adjusted_requests,
                     system_load=avg_load,
@@ -285,19 +284,19 @@ class AdaptiveRateLimiter:
                 metrics.record_gauge("rate_limit_adjustment_factor", adjustment, tags={"key": key[:10]})
         else:
             adjusted_config = config
-        
+
         return self.base_limiter.check_limit(key, adjusted_config)
 
 
 class RateLimitMiddleware:
     """Middleware for applying rate limits to requests."""
-    
-    def __init__(self, limiter: Union[InMemoryRateLimiter, RedisRateLimiter, AdaptiveRateLimiter], 
+
+    def __init__(self, limiter: Union[InMemoryRateLimiter, RedisRateLimiter, AdaptiveRateLimiter],
                  default_config: RateLimitConfig):
         self.limiter = limiter
         self.default_config = default_config
         self.endpoint_configs: Dict[str, RateLimitConfig] = {}
-    
+
     def configure_endpoint(self, endpoint: str, config: RateLimitConfig):
         """Configure rate limiting for a specific endpoint.
         
@@ -306,7 +305,7 @@ class RateLimitMiddleware:
             config: Rate limiting configuration for this endpoint
         """
         self.endpoint_configs[endpoint] = config
-    
+
     def get_client_key(self, request_info: Dict[str, str]) -> str:
         """Generate a unique key for rate limiting based on request info.
         
@@ -318,13 +317,13 @@ class RateLimitMiddleware:
         """
         # Use IP address as primary identifier
         client_ip = request_info.get("client_ip", "unknown")
-        
+
         # Include user agent hash for additional uniqueness
         user_agent = request_info.get("user_agent", "")
         user_agent_hash = hashlib.md5(user_agent.encode()).hexdigest()[:8]
-        
+
         return f"{client_ip}:{user_agent_hash}"
-    
+
     def check_rate_limit(self, request_info: Dict[str, str], endpoint: Optional[str] = None) -> RateLimitResult:
         """Check rate limit for a request.
         
@@ -337,7 +336,7 @@ class RateLimitMiddleware:
         """
         key = self.get_client_key(request_info)
         config = self.endpoint_configs.get(endpoint, self.default_config) if endpoint else self.default_config
-        
+
         return self.limiter.check_limit(key, config)
 
 

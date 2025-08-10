@@ -15,10 +15,9 @@ Supported environment variables:
 
 import json
 import os
-import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Any, Optional, Union
+from typing import Any, Dict, Optional, Union
 from urllib.parse import urlparse
 
 
@@ -30,24 +29,24 @@ class ConfigurationError(Exception):
 @dataclass
 class Config:
     """Configuration container for autogen-code-review-bot."""
-    
+
     # GitHub Integration Settings
     github_api_url: str = "https://api.github.com"
-    
+
     # Timeout Settings (in seconds)
     default_timeout: int = 30
     http_timeout: int = 10
-    
+
     # Linter Configuration
     default_linters: Dict[str, str] = field(default_factory=lambda: {
         "python": "ruff",
-        "javascript": "eslint", 
+        "javascript": "eslint",
         "typescript": "eslint",
         "ruby": "rubocop",
         "go": "golangci-lint",
         "rust": "clippy",
     })
-    
+
     def __post_init__(self):
         """Validate configuration after initialization."""
         validate_config(self)
@@ -65,25 +64,25 @@ def validate_config(config: Config) -> None:
     # Validate GitHub API URL
     if not isinstance(config.github_api_url, str) or not config.github_api_url.strip():
         raise ConfigurationError("GitHub API URL cannot be empty")
-        
+
     parsed_url = urlparse(config.github_api_url)
     if not parsed_url.scheme or not parsed_url.netloc:
         raise ConfigurationError(f"Invalid GitHub API URL: {config.github_api_url}")
-        
+
     if parsed_url.scheme not in ('http', 'https'):
         raise ConfigurationError(f"GitHub API URL must use HTTP or HTTPS: {config.github_api_url}")
-    
+
     # Validate timeouts
     if not isinstance(config.default_timeout, int) or config.default_timeout <= 0:
         raise ConfigurationError(f"Timeout must be positive integer, got: {config.default_timeout}")
-        
+
     if not isinstance(config.http_timeout, int) or config.http_timeout <= 0:
         raise ConfigurationError(f"HTTP timeout must be positive integer, got: {config.http_timeout}")
-    
+
     # Validate linters configuration
     if not isinstance(config.default_linters, dict):
         raise ConfigurationError(f"default_linters must be a dictionary, got: {type(config.default_linters)}")
-        
+
     for language, linter in config.default_linters.items():
         if not isinstance(language, str) or not isinstance(linter, str):
             raise ConfigurationError(f"Linter mapping must be str->str, got {language}: {linter}")
@@ -111,12 +110,12 @@ def load_config_from_file(file_path: Union[str, Path]) -> Dict[str, Any]:
         ConfigurationError: If file cannot be loaded or parsed.
     """
     file_path = Path(file_path)
-    
+
     if not file_path.exists():
         return {}
-        
+
     try:
-        with open(file_path, 'r', encoding='utf-8') as f:
+        with open(file_path, encoding='utf-8') as f:
             if file_path.suffix.lower() == '.json':
                 return json.load(f)
             else:
@@ -134,31 +133,31 @@ def load_config_from_environment() -> Dict[str, Any]:
         Dictionary of configuration values from environment.
     """
     config = {}
-    
+
     # GitHub API URL
     if 'AUTOGEN_GITHUB_API_URL' in os.environ:
         config['github_api_url'] = os.environ['AUTOGEN_GITHUB_API_URL']
-    
+
     # Timeout settings
     if 'AUTOGEN_DEFAULT_TIMEOUT' in os.environ:
         try:
             config['default_timeout'] = int(os.environ['AUTOGEN_DEFAULT_TIMEOUT'])
         except ValueError:
             raise ConfigurationError(f"Invalid AUTOGEN_DEFAULT_TIMEOUT: {os.environ['AUTOGEN_DEFAULT_TIMEOUT']}")
-            
+
     if 'AUTOGEN_HTTP_TIMEOUT' in os.environ:
         try:
             config['http_timeout'] = int(os.environ['AUTOGEN_HTTP_TIMEOUT'])
         except ValueError:
             raise ConfigurationError(f"Invalid AUTOGEN_HTTP_TIMEOUT: {os.environ['AUTOGEN_HTTP_TIMEOUT']}")
-    
+
     # Linter configuration via environment (JSON format)
     if 'AUTOGEN_DEFAULT_LINTERS' in os.environ:
         try:
             config['default_linters'] = json.loads(os.environ['AUTOGEN_DEFAULT_LINTERS'])
         except json.JSONDecodeError as e:
             raise ConfigurationError(f"Invalid AUTOGEN_DEFAULT_LINTERS JSON: {e}")
-    
+
     return config
 
 
@@ -175,18 +174,18 @@ def merge_config_sources(*sources: Dict[str, Any]) -> Dict[str, Any]:
         Merged configuration dictionary.
     """
     merged = {}
-    
+
     for source in sources:
         for key, value in source.items():
-            if (key in merged and 
-                isinstance(merged[key], dict) and 
+            if (key in merged and
+                isinstance(merged[key], dict) and
                 isinstance(value, dict)):
                 # Recursively merge dictionaries
                 merged[key] = merge_config_sources(merged[key], value)
             else:
                 # Override with new value
                 merged[key] = value
-                
+
     return merged
 
 
@@ -212,15 +211,15 @@ def load_config(config_file: Optional[Union[str, Path]] = None) -> Config:
         ConfigurationError: If configuration is invalid.
     """
     global _config_cache
-    
+
     # Use cached config if available (for performance)
     if _config_cache is not None:
         return _config_cache
-    
+
     # Determine config file to use
     if config_file is None:
         config_file = os.environ.get('AUTOGEN_CONFIG_FILE')
-    
+
     # Load from all sources
     default_config = get_default_config()
     default_dict = {
@@ -229,13 +228,13 @@ def load_config(config_file: Optional[Union[str, Path]] = None) -> Config:
         'http_timeout': default_config.http_timeout,
         'default_linters': default_config.default_linters,
     }
-    
+
     file_config = load_config_from_file(config_file) if config_file else {}
     env_config = load_config_from_environment()
-    
+
     # Merge all sources (environment takes precedence)
     merged_config = merge_config_sources(default_dict, file_config, env_config)
-    
+
     # Create and validate config object
     try:
         config = Config(**merged_config)

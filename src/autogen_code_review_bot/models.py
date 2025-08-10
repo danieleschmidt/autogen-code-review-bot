@@ -1,7 +1,7 @@
 """Data models for PR analysis results."""
 
 from dataclasses import dataclass
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
 
 @dataclass
