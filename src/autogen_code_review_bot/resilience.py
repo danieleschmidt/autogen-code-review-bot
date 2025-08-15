@@ -30,6 +30,7 @@ metrics = get_metrics_registry()
 
 class RetryStrategy(Enum):
     """Retry strategies for different failure scenarios."""
+
     EXPONENTIAL_BACKOFF = "exponential_backoff"
     LINEAR_BACKOFF = "linear_backoff"
     FIXED_DELAY = "fixed_delay"
@@ -39,20 +40,27 @@ class RetryStrategy(Enum):
 @dataclass
 class RetryConfig:
     """Configuration for retry behavior."""
+
     max_attempts: int = 3
     strategy: RetryStrategy = RetryStrategy.EXPONENTIAL_BACKOFF
     base_delay: float = 1.0  # seconds
     max_delay: float = 60.0  # seconds
     backoff_factor: float = 2.0
     jitter: bool = True
-    retryable_exceptions: List[Type[Exception]] = field(default_factory=lambda: [
-        ConnectionError, TimeoutError, AnalysisError, SecurityError
-    ])
+    retryable_exceptions: List[Type[Exception]] = field(
+        default_factory=lambda: [
+            ConnectionError,
+            TimeoutError,
+            AnalysisError,
+            SecurityError,
+        ]
+    )
 
 
 @dataclass
 class BulkheadConfig:
     """Configuration for bulkhead isolation."""
+
     max_concurrent_requests: int = 100
     queue_size: int = 1000
     timeout_seconds: float = 300.0  # 5 minutes
@@ -73,28 +81,34 @@ class TimeoutManager:
         timeout_task = None
 
         try:
-            self.logger.debug(f"Starting timeout context for {operation_name}", extra={
-                'timeout_seconds': timeout_seconds,
-                'operation': operation_name
-            })
+            self.logger.debug(
+                f"Starting timeout context for {operation_name}",
+                extra={"timeout_seconds": timeout_seconds, "operation": operation_name},
+            )
 
             yield
 
         except Exception:
             elapsed = time.time() - start_time
             if elapsed >= timeout_seconds:
-                self.logger.error(f"Operation {operation_name} timed out", extra={
-                    'elapsed_seconds': elapsed,
-                    'timeout_seconds': timeout_seconds
-                })
-                raise TimeoutError(f"Operation {operation_name} timed out after {elapsed:.2f}s")
+                self.logger.error(
+                    f"Operation {operation_name} timed out",
+                    extra={
+                        "elapsed_seconds": elapsed,
+                        "timeout_seconds": timeout_seconds,
+                    },
+                )
+                raise TimeoutError(
+                    f"Operation {operation_name} timed out after {elapsed:.2f}s"
+                )
             raise
 
         finally:
             elapsed = time.time() - start_time
-            self.logger.debug(f"Timeout context completed for {operation_name}", extra={
-                'elapsed_seconds': elapsed
-            })
+            self.logger.debug(
+                f"Timeout context completed for {operation_name}",
+                extra={"elapsed_seconds": elapsed},
+            )
 
     @asynccontextmanager
     async def async_timeout_context(self, timeout_seconds: float, operation_name: str):
@@ -102,27 +116,30 @@ class TimeoutManager:
         start_time = time.time()
 
         try:
-            self.logger.debug(f"Starting async timeout context for {operation_name}", extra={
-                'timeout_seconds': timeout_seconds,
-                'operation': operation_name
-            })
+            self.logger.debug(
+                f"Starting async timeout context for {operation_name}",
+                extra={"timeout_seconds": timeout_seconds, "operation": operation_name},
+            )
 
             async with asyncio.timeout(timeout_seconds):
                 yield
 
         except asyncio.TimeoutError:
             elapsed = time.time() - start_time
-            self.logger.error(f"Async operation {operation_name} timed out", extra={
-                'elapsed_seconds': elapsed,
-                'timeout_seconds': timeout_seconds
-            })
-            raise TimeoutError(f"Async operation {operation_name} timed out after {elapsed:.2f}s")
+            self.logger.error(
+                f"Async operation {operation_name} timed out",
+                extra={"elapsed_seconds": elapsed, "timeout_seconds": timeout_seconds},
+            )
+            raise TimeoutError(
+                f"Async operation {operation_name} timed out after {elapsed:.2f}s"
+            )
 
         finally:
             elapsed = time.time() - start_time
-            self.logger.debug(f"Async timeout context completed for {operation_name}", extra={
-                'elapsed_seconds': elapsed
-            })
+            self.logger.debug(
+                f"Async timeout context completed for {operation_name}",
+                extra={"elapsed_seconds": elapsed},
+            )
 
 
 class RetryManager:
@@ -135,14 +152,19 @@ class RetryManager:
 
     def retry(self, config: RetryConfig, operation_name: str = None):
         """Decorator for adding retry logic to functions."""
+
         def decorator(func: Callable):
             @functools.wraps(func)
             def wrapper(*args, **kwargs):
-                return self._execute_with_retry(func, config, operation_name or func.__name__, *args, **kwargs)
+                return self._execute_with_retry(
+                    func, config, operation_name or func.__name__, *args, **kwargs
+                )
 
             @functools.wraps(func)
             async def async_wrapper(*args, **kwargs):
-                return await self._execute_with_retry_async(func, config, operation_name or func.__name__, *args, **kwargs)
+                return await self._execute_with_retry_async(
+                    func, config, operation_name or func.__name__, *args, **kwargs
+                )
 
             if asyncio.iscoroutinefunction(func):
                 return async_wrapper
@@ -151,14 +173,17 @@ class RetryManager:
 
         return decorator
 
-    def _execute_with_retry(self, func: Callable, config: RetryConfig,
-                           operation_name: str, *args, **kwargs) -> Any:
+    def _execute_with_retry(
+        self, func: Callable, config: RetryConfig, operation_name: str, *args, **kwargs
+    ) -> Any:
         """Execute function with retry logic."""
         last_exception = None
 
         for attempt in range(1, config.max_attempts + 1):
             try:
-                self.logger.debug(f"Attempting {operation_name} (attempt {attempt}/{config.max_attempts})")
+                self.logger.debug(
+                    f"Attempting {operation_name} (attempt {attempt}/{config.max_attempts})"
+                )
 
                 result = func(*args, **kwargs)
 
@@ -172,8 +197,12 @@ class RetryManager:
                 last_exception = e
 
                 # Check if exception is retryable
-                if not any(isinstance(e, exc_type) for exc_type in config.retryable_exceptions):
-                    self.logger.warning(f"Non-retryable exception in {operation_name}: {e}")
+                if not any(
+                    isinstance(e, exc_type) for exc_type in config.retryable_exceptions
+                ):
+                    self.logger.warning(
+                        f"Non-retryable exception in {operation_name}: {e}"
+                    )
                     raise
 
                 # Don't retry on last attempt
@@ -183,32 +212,41 @@ class RetryManager:
                 # Calculate delay
                 delay = self._calculate_delay(config, attempt)
 
-                self.logger.warning(f"Attempt {attempt} failed for {operation_name}, retrying in {delay:.2f}s", extra={
-                    'error': str(e),
-                    'attempt': attempt,
-                    'max_attempts': config.max_attempts,
-                    'delay_seconds': delay
-                })
+                self.logger.warning(
+                    f"Attempt {attempt} failed for {operation_name}, retrying in {delay:.2f}s",
+                    extra={
+                        "error": str(e),
+                        "attempt": attempt,
+                        "max_attempts": config.max_attempts,
+                        "delay_seconds": delay,
+                    },
+                )
 
                 time.sleep(delay)
 
         # All retries exhausted
         self._record_retry_failure(operation_name, config.max_attempts)
-        self.logger.error(f"All retry attempts exhausted for {operation_name}", extra={
-            'max_attempts': config.max_attempts,
-            'final_error': str(last_exception)
-        })
+        self.logger.error(
+            f"All retry attempts exhausted for {operation_name}",
+            extra={
+                "max_attempts": config.max_attempts,
+                "final_error": str(last_exception),
+            },
+        )
 
         raise last_exception
 
-    async def _execute_with_retry_async(self, func: Callable, config: RetryConfig,
-                                       operation_name: str, *args, **kwargs) -> Any:
+    async def _execute_with_retry_async(
+        self, func: Callable, config: RetryConfig, operation_name: str, *args, **kwargs
+    ) -> Any:
         """Execute async function with retry logic."""
         last_exception = None
 
         for attempt in range(1, config.max_attempts + 1):
             try:
-                self.logger.debug(f"Attempting async {operation_name} (attempt {attempt}/{config.max_attempts})")
+                self.logger.debug(
+                    f"Attempting async {operation_name} (attempt {attempt}/{config.max_attempts})"
+                )
 
                 result = await func(*args, **kwargs)
 
@@ -222,8 +260,12 @@ class RetryManager:
                 last_exception = e
 
                 # Check if exception is retryable
-                if not any(isinstance(e, exc_type) for exc_type in config.retryable_exceptions):
-                    self.logger.warning(f"Non-retryable async exception in {operation_name}: {e}")
+                if not any(
+                    isinstance(e, exc_type) for exc_type in config.retryable_exceptions
+                ):
+                    self.logger.warning(
+                        f"Non-retryable async exception in {operation_name}: {e}"
+                    )
                     raise
 
                 # Don't retry on last attempt
@@ -233,21 +275,27 @@ class RetryManager:
                 # Calculate delay
                 delay = self._calculate_delay(config, attempt)
 
-                self.logger.warning(f"Async attempt {attempt} failed for {operation_name}, retrying in {delay:.2f}s", extra={
-                    'error': str(e),
-                    'attempt': attempt,
-                    'max_attempts': config.max_attempts,
-                    'delay_seconds': delay
-                })
+                self.logger.warning(
+                    f"Async attempt {attempt} failed for {operation_name}, retrying in {delay:.2f}s",
+                    extra={
+                        "error": str(e),
+                        "attempt": attempt,
+                        "max_attempts": config.max_attempts,
+                        "delay_seconds": delay,
+                    },
+                )
 
                 await asyncio.sleep(delay)
 
         # All retries exhausted
         self._record_retry_failure(operation_name, config.max_attempts)
-        self.logger.error(f"All async retry attempts exhausted for {operation_name}", extra={
-            'max_attempts': config.max_attempts,
-            'final_error': str(last_exception)
-        })
+        self.logger.error(
+            f"All async retry attempts exhausted for {operation_name}",
+            extra={
+                "max_attempts": config.max_attempts,
+                "final_error": str(last_exception),
+            },
+        )
 
         raise last_exception
 
@@ -268,6 +316,7 @@ class RetryManager:
         # Add jitter if enabled
         if config.jitter and delay > 0:
             import random
+
             jitter_amount = delay * 0.1  # 10% jitter
             delay += random.uniform(-jitter_amount, jitter_amount)
             delay = max(0.0, delay)  # Ensure non-negative
@@ -277,28 +326,38 @@ class RetryManager:
     def _record_retry_success(self, operation_name: str, attempts: int):
         """Record successful retry metrics."""
         if operation_name not in self._retry_stats:
-            self._retry_stats[operation_name] = {'successes': 0, 'failures': 0, 'total_attempts': 0}
+            self._retry_stats[operation_name] = {
+                "successes": 0,
+                "failures": 0,
+                "total_attempts": 0,
+            }
 
-        self._retry_stats[operation_name]['successes'] += 1
-        self._retry_stats[operation_name]['total_attempts'] += attempts
+        self._retry_stats[operation_name]["successes"] += 1
+        self._retry_stats[operation_name]["total_attempts"] += attempts
 
-        metrics.record_counter("retry_successes_total", 1, tags={
-            'operation': operation_name,
-            'attempts': str(attempts)
-        })
+        metrics.record_counter(
+            "retry_successes_total",
+            1,
+            tags={"operation": operation_name, "attempts": str(attempts)},
+        )
 
     def _record_retry_failure(self, operation_name: str, attempts: int):
         """Record failed retry metrics."""
         if operation_name not in self._retry_stats:
-            self._retry_stats[operation_name] = {'successes': 0, 'failures': 0, 'total_attempts': 0}
+            self._retry_stats[operation_name] = {
+                "successes": 0,
+                "failures": 0,
+                "total_attempts": 0,
+            }
 
-        self._retry_stats[operation_name]['failures'] += 1
-        self._retry_stats[operation_name]['total_attempts'] += attempts
+        self._retry_stats[operation_name]["failures"] += 1
+        self._retry_stats[operation_name]["total_attempts"] += attempts
 
-        metrics.record_counter("retry_failures_total", 1, tags={
-            'operation': operation_name,
-            'attempts': str(attempts)
-        })
+        metrics.record_counter(
+            "retry_failures_total",
+            1,
+            tags={"operation": operation_name, "attempts": str(attempts)},
+        )
 
     def get_retry_stats(self) -> Dict[str, Dict[str, Any]]:
         """Get retry statistics for all operations."""
@@ -319,15 +378,20 @@ class BulkheadManager:
     def get_bulkhead(self, name: str) -> asyncio.Semaphore:
         """Get or create bulkhead semaphore for resource isolation."""
         if name not in self.semaphores:
-            self.semaphores[name] = asyncio.Semaphore(self.config.max_concurrent_requests)
+            self.semaphores[name] = asyncio.Semaphore(
+                self.config.max_concurrent_requests
+            )
             self.queues[name] = asyncio.Queue(maxsize=self.config.queue_size)
             self.active_requests[name] = 0
             self.locks[name] = threading.Lock()
 
-            self.logger.info(f"Created bulkhead for {name}", extra={
-                'max_concurrent': self.config.max_concurrent_requests,
-                'queue_size': self.config.queue_size
-            })
+            self.logger.info(
+                f"Created bulkhead for {name}",
+                extra={
+                    "max_concurrent": self.config.max_concurrent_requests,
+                    "queue_size": self.config.queue_size,
+                },
+            )
 
         return self.semaphores[name]
 
@@ -341,8 +405,7 @@ class BulkheadManager:
         try:
             # Wait for available slot with timeout
             await asyncio.wait_for(
-                semaphore.acquire(),
-                timeout=self.config.timeout_seconds
+                semaphore.acquire(), timeout=self.config.timeout_seconds
             )
 
             with self.locks[bulkhead_name]:
@@ -350,29 +413,39 @@ class BulkheadManager:
 
             wait_time = time.time() - start_time
 
-            self.logger.debug(f"Acquired resource in bulkhead {bulkhead_name}", extra={
-                'wait_time_seconds': wait_time,
-                'active_requests': self.active_requests[bulkhead_name]
-            })
+            self.logger.debug(
+                f"Acquired resource in bulkhead {bulkhead_name}",
+                extra={
+                    "wait_time_seconds": wait_time,
+                    "active_requests": self.active_requests[bulkhead_name],
+                },
+            )
 
             # Record metrics
-            metrics.record_histogram("bulkhead_wait_time_seconds", wait_time, tags={
-                'bulkhead': bulkhead_name
-            })
+            metrics.record_histogram(
+                "bulkhead_wait_time_seconds",
+                wait_time,
+                tags={"bulkhead": bulkhead_name},
+            )
 
             yield
 
         except asyncio.TimeoutError:
-            self.logger.error(f"Bulkhead {bulkhead_name} acquisition timeout", extra={
-                'timeout_seconds': self.config.timeout_seconds,
-                'wait_time_seconds': time.time() - start_time
-            })
+            self.logger.error(
+                f"Bulkhead {bulkhead_name} acquisition timeout",
+                extra={
+                    "timeout_seconds": self.config.timeout_seconds,
+                    "wait_time_seconds": time.time() - start_time,
+                },
+            )
 
-            metrics.record_counter("bulkhead_timeouts_total", 1, tags={
-                'bulkhead': bulkhead_name
-            })
+            metrics.record_counter(
+                "bulkhead_timeouts_total", 1, tags={"bulkhead": bulkhead_name}
+            )
 
-            raise TimeoutError(f"Could not acquire resource in bulkhead {bulkhead_name}")
+            raise TimeoutError(
+                f"Could not acquire resource in bulkhead {bulkhead_name}"
+            )
 
         finally:
             try:
@@ -388,10 +461,10 @@ class BulkheadManager:
         for name in self.semaphores:
             semaphore = self.semaphores[name]
             stats[name] = {
-                'active_requests': self.active_requests.get(name, 0),
-                'available_slots': semaphore._value,
-                'max_concurrent': self.config.max_concurrent_requests,
-                'queue_size': self.config.queue_size
+                "active_requests": self.active_requests.get(name, 0),
+                "available_slots": semaphore._value,
+                "max_concurrent": self.config.max_concurrent_requests,
+                "queue_size": self.config.queue_size,
             }
         return stats
 
@@ -407,25 +480,27 @@ class HealthMonitor:
         self._monitoring_task: Optional[asyncio.Task] = None
         self._running = False
 
-    def register_health_check(self, name: str, check_func: Callable,
-                            interval_seconds: float = 60.0):
+    def register_health_check(
+        self, name: str, check_func: Callable, interval_seconds: float = 60.0
+    ):
         """Register a health check function."""
         self.health_checks[name] = {
-            'function': check_func,
-            'interval': interval_seconds,
-            'last_check': 0,
-            'consecutive_failures': 0
+            "function": check_func,
+            "interval": interval_seconds,
+            "last_check": 0,
+            "consecutive_failures": 0,
         }
 
         self.health_status[name] = {
-            'status': 'unknown',
-            'last_check': None,
-            'message': 'Not yet checked'
+            "status": "unknown",
+            "last_check": None,
+            "message": "Not yet checked",
         }
 
-        self.logger.info(f"Registered health check: {name}", extra={
-            'interval_seconds': interval_seconds
-        })
+        self.logger.info(
+            f"Registered health check: {name}",
+            extra={"interval_seconds": interval_seconds},
+        )
 
     def register_degradation_strategy(self, component: str, strategy_func: Callable):
         """Register degradation strategy for component."""
@@ -460,7 +535,10 @@ class HealthMonitor:
 
                 # Run health checks
                 for name, check_config in self.health_checks.items():
-                    if current_time - check_config['last_check'] >= check_config['interval']:
+                    if (
+                        current_time - check_config["last_check"]
+                        >= check_config["interval"]
+                    ):
                         await self._run_health_check(name, check_config)
 
                 # Check for degradation needs
@@ -475,7 +553,7 @@ class HealthMonitor:
     async def _run_health_check(self, name: str, check_config: Dict[str, Any]):
         """Run individual health check."""
         try:
-            check_func = check_config['function']
+            check_func = check_config["function"]
 
             # Run health check (support both sync and async)
             if asyncio.iscoroutinefunction(check_func):
@@ -485,43 +563,52 @@ class HealthMonitor:
 
             # Update status
             self.health_status[name] = {
-                'status': 'healthy' if result.get('healthy', True) else 'unhealthy',
-                'last_check': datetime.now(timezone.utc),
-                'message': result.get('message', 'OK'),
-                'details': result.get('details', {})
+                "status": "healthy" if result.get("healthy", True) else "unhealthy",
+                "last_check": datetime.now(timezone.utc),
+                "message": result.get("message", "OK"),
+                "details": result.get("details", {}),
             }
 
-            check_config['last_check'] = time.time()
-            check_config['consecutive_failures'] = 0
+            check_config["last_check"] = time.time()
+            check_config["consecutive_failures"] = 0
 
-            self.logger.debug(f"Health check {name} completed", extra={
-                'status': self.health_status[name]['status'],
-                'message': self.health_status[name]['message']
-            })
+            self.logger.debug(
+                f"Health check {name} completed",
+                extra={
+                    "status": self.health_status[name]["status"],
+                    "message": self.health_status[name]["message"],
+                },
+            )
 
         except Exception as e:
-            check_config['consecutive_failures'] += 1
+            check_config["consecutive_failures"] += 1
 
             self.health_status[name] = {
-                'status': 'unhealthy',
-                'last_check': datetime.now(timezone.utc),
-                'message': f'Health check failed: {str(e)}',
-                'consecutive_failures': check_config['consecutive_failures']
+                "status": "unhealthy",
+                "last_check": datetime.now(timezone.utc),
+                "message": f"Health check failed: {str(e)}",
+                "consecutive_failures": check_config["consecutive_failures"],
             }
 
-            self.logger.error(f"Health check {name} failed", extra={
-                'error': str(e),
-                'consecutive_failures': check_config['consecutive_failures']
-            })
+            self.logger.error(
+                f"Health check {name} failed",
+                extra={
+                    "error": str(e),
+                    "consecutive_failures": check_config["consecutive_failures"],
+                },
+            )
 
     async def _check_degradation_needs(self):
         """Check if any components need degradation."""
         for component, status in self.health_status.items():
-            if status['status'] == 'unhealthy':
-                consecutive_failures = status.get('consecutive_failures', 0)
+            if status["status"] == "unhealthy":
+                consecutive_failures = status.get("consecutive_failures", 0)
 
                 # Trigger degradation after 3 consecutive failures
-                if consecutive_failures >= 3 and component in self.degradation_strategies:
+                if (
+                    consecutive_failures >= 3
+                    and component in self.degradation_strategies
+                ):
                     try:
                         strategy = self.degradation_strategies[component]
                         if asyncio.iscoroutinefunction(strategy):
@@ -529,33 +616,45 @@ class HealthMonitor:
                         else:
                             strategy(status)
 
-                        self.logger.warning(f"Applied degradation strategy for {component}")
+                        self.logger.warning(
+                            f"Applied degradation strategy for {component}"
+                        )
 
                     except Exception as e:
-                        self.logger.error(f"Degradation strategy failed for {component}: {e}")
+                        self.logger.error(
+                            f"Degradation strategy failed for {component}: {e}"
+                        )
 
     def get_overall_health(self) -> Dict[str, Any]:
         """Get overall system health status."""
-        healthy_count = sum(1 for status in self.health_status.values() if status['status'] == 'healthy')
+        healthy_count = sum(
+            1 for status in self.health_status.values() if status["status"] == "healthy"
+        )
         total_count = len(self.health_status)
 
-        overall_status = 'healthy' if healthy_count == total_count else 'degraded' if healthy_count > 0 else 'unhealthy'
+        overall_status = (
+            "healthy"
+            if healthy_count == total_count
+            else "degraded" if healthy_count > 0 else "unhealthy"
+        )
 
         return {
-            'status': overall_status,
-            'healthy_components': healthy_count,
-            'total_components': total_count,
-            'components': self.health_status.copy(),
-            'timestamp': datetime.now(timezone.utc).isoformat()
+            "status": overall_status,
+            "healthy_components": healthy_count,
+            "total_components": total_count,
+            "components": self.health_status.copy(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
 
 class ResilienceOrchestrator:
     """Orchestrates all resilience components."""
 
-    def __init__(self,
-                 retry_config: Optional[RetryConfig] = None,
-                 bulkhead_config: Optional[BulkheadConfig] = None):
+    def __init__(
+        self,
+        retry_config: Optional[RetryConfig] = None,
+        bulkhead_config: Optional[BulkheadConfig] = None,
+    ):
         self.retry_config = retry_config or RetryConfig()
         self.bulkhead_config = bulkhead_config or BulkheadConfig()
 
@@ -573,64 +672,63 @@ class ResilienceOrchestrator:
     def _register_default_health_checks(self):
         """Register default system health checks."""
         self.health_monitor.register_health_check(
-            'memory_usage',
-            self._check_memory_usage,
-            interval_seconds=30.0
+            "memory_usage", self._check_memory_usage, interval_seconds=30.0
         )
 
         self.health_monitor.register_health_check(
-            'disk_space',
-            self._check_disk_space,
-            interval_seconds=60.0
+            "disk_space", self._check_disk_space, interval_seconds=60.0
         )
 
     def _check_memory_usage(self) -> Dict[str, Any]:
         """Check system memory usage."""
         try:
             import psutil
+
             memory = psutil.virtual_memory()
 
             # Consider unhealthy if memory usage > 90%
             healthy = memory.percent < 90
 
             return {
-                'healthy': healthy,
-                'message': f'Memory usage: {memory.percent:.1f}%',
-                'details': {
-                    'percent': memory.percent,
-                    'available_gb': memory.available / (1024**3),
-                    'total_gb': memory.total / (1024**3)
-                }
+                "healthy": healthy,
+                "message": f"Memory usage: {memory.percent:.1f}%",
+                "details": {
+                    "percent": memory.percent,
+                    "available_gb": memory.available / (1024**3),
+                    "total_gb": memory.total / (1024**3),
+                },
             }
         except ImportError:
-            return {'healthy': True, 'message': 'psutil not available'}
+            return {"healthy": True, "message": "psutil not available"}
 
     def _check_disk_space(self) -> Dict[str, Any]:
         """Check disk space usage."""
         try:
             import psutil
-            disk = psutil.disk_usage('/')
+
+            disk = psutil.disk_usage("/")
 
             # Consider unhealthy if disk usage > 85%
             usage_percent = (disk.used / disk.total) * 100
             healthy = usage_percent < 85
 
             return {
-                'healthy': healthy,
-                'message': f'Disk usage: {usage_percent:.1f}%',
-                'details': {
-                    'percent': usage_percent,
-                    'free_gb': disk.free / (1024**3),
-                    'total_gb': disk.total / (1024**3)
-                }
+                "healthy": healthy,
+                "message": f"Disk usage: {usage_percent:.1f}%",
+                "details": {
+                    "percent": usage_percent,
+                    "free_gb": disk.free / (1024**3),
+                    "total_gb": disk.total / (1024**3),
+                },
             }
         except ImportError:
-            return {'healthy': True, 'message': 'psutil not available'}
+            return {"healthy": True, "message": "psutil not available"}
 
     def get_circuit_breaker(self, name: str) -> CircuitBreaker:
         """Get or create circuit breaker."""
         if name not in self.circuit_breakers:
             from .circuit_breaker import CircuitBreakerConfig
+
             config = CircuitBreakerConfig(name=name)
             self.circuit_breakers[name] = CircuitBreaker(config)
 
@@ -649,13 +747,13 @@ class ResilienceOrchestrator:
     def get_resilience_status(self) -> Dict[str, Any]:
         """Get comprehensive resilience status."""
         return {
-            'health': self.health_monitor.get_overall_health(),
-            'bulkheads': self.bulkhead_manager.get_bulkhead_stats(),
-            'retries': self.retry_manager.get_retry_stats(),
-            'circuit_breakers': {
+            "health": self.health_monitor.get_overall_health(),
+            "bulkheads": self.bulkhead_manager.get_bulkhead_stats(),
+            "retries": self.retry_manager.get_retry_stats(),
+            "circuit_breakers": {
                 name: cb.get_stats() for name, cb in self.circuit_breakers.items()
             },
-            'timestamp': datetime.now(timezone.utc).isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
 
@@ -675,11 +773,14 @@ def get_resilience_orchestrator() -> ResilienceOrchestrator:
 def with_retry(config: Optional[RetryConfig] = None, operation_name: str = None):
     """Decorator for adding retry logic."""
     retry_config = config or RetryConfig()
-    return get_resilience_orchestrator().retry_manager.retry(retry_config, operation_name)
+    return get_resilience_orchestrator().retry_manager.retry(
+        retry_config, operation_name
+    )
 
 
 def with_circuit_breaker(breaker_name: str):
     """Decorator for adding circuit breaker protection."""
+
     def decorator(func: Callable):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
@@ -701,11 +802,14 @@ def with_circuit_breaker(breaker_name: str):
 
 def with_bulkhead(bulkhead_name: str, priority: int = 1):
     """Decorator for adding bulkhead protection (async only)."""
+
     def decorator(func: Callable):
         @functools.wraps(func)
         async def async_wrapper(*args, **kwargs):
             orchestrator = get_resilience_orchestrator()
-            async with orchestrator.bulkhead_manager.acquire_resource(bulkhead_name, priority):
+            async with orchestrator.bulkhead_manager.acquire_resource(
+                bulkhead_name, priority
+            ):
                 return await func(*args, **kwargs)
 
         if not asyncio.iscoroutinefunction(func):

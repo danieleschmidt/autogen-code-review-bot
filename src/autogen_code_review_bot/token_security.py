@@ -11,41 +11,62 @@ class TokenMasker:
     # Common token patterns to mask
     TOKEN_PATTERNS = [
         # GitHub tokens (ghp_, ghs_, gho_, ghu_, ghr_)
-        (re.compile(r'\bghp_[A-Za-z0-9]{36}\b'), '***GITHUB_TOKEN***'),
-        (re.compile(r'\bghs_[A-Za-z0-9]{36}\b'), '***GITHUB_TOKEN***'),
-        (re.compile(r'\bgho_[A-Za-z0-9]{36}\b'), '***GITHUB_TOKEN***'),
-        (re.compile(r'\bghu_[A-Za-z0-9]{36}\b'), '***GITHUB_TOKEN***'),
-        (re.compile(r'\bghr_[A-Za-z0-9]{36}\b'), '***GITHUB_TOKEN***'),
-
+        (re.compile(r"\bghp_[A-Za-z0-9]{36}\b"), "***GITHUB_TOKEN***"),
+        (re.compile(r"\bghs_[A-Za-z0-9]{36}\b"), "***GITHUB_TOKEN***"),
+        (re.compile(r"\bgho_[A-Za-z0-9]{36}\b"), "***GITHUB_TOKEN***"),
+        (re.compile(r"\bghu_[A-Za-z0-9]{36}\b"), "***GITHUB_TOKEN***"),
+        (re.compile(r"\bghr_[A-Za-z0-9]{36}\b"), "***GITHUB_TOKEN***"),
         # Generic GitHub personal access tokens (older format)
-        (re.compile(r'\b[a-f0-9]{40}\b'), '***TOKEN***'),
-
+        (re.compile(r"\b[a-f0-9]{40}\b"), "***TOKEN***"),
         # Authorization headers
-        (re.compile(r'Authorization:\s*token\s+[^\s]+', re.IGNORECASE), 'Authorization: token ***'),
-        (re.compile(r'Authorization:\s*Bearer\s+[^\s]+', re.IGNORECASE), 'Authorization: Bearer ***'),
-
+        (
+            re.compile(r"Authorization:\s*token\s+[^\s]+", re.IGNORECASE),
+            "Authorization: token ***",
+        ),
+        (
+            re.compile(r"Authorization:\s*Bearer\s+[^\s]+", re.IGNORECASE),
+            "Authorization: Bearer ***",
+        ),
         # Basic auth in URLs
-        (re.compile(r'https://[^:]+:[^@]+@'), 'https://***:***@'),
-
+        (re.compile(r"https://[^:]+:[^@]+@"), "https://***:***@"),
         # Generic secrets (patterns that look like API keys/tokens)
-        (re.compile(r'\b[A-Za-z0-9_-]{32,}\b'), '***SECRET***'),
-
+        (re.compile(r"\b[A-Za-z0-9_-]{32,}\b"), "***SECRET***"),
         # Webhook secrets in query params or JSON
-        (re.compile(r'["\']?secret["\']?\s*[:=]\s*["\']?[^"\'&\s]+["\']?', re.IGNORECASE), 'secret: "***"'),
-        (re.compile(r'["\']?webhook_secret["\']?\s*[:=]\s*["\']?[^"\'&\s]+["\']?', re.IGNORECASE), 'webhook_secret: "***"'),
-
+        (
+            re.compile(
+                r'["\']?secret["\']?\s*[:=]\s*["\']?[^"\'&\s]+["\']?', re.IGNORECASE
+            ),
+            'secret: "***"',
+        ),
+        (
+            re.compile(
+                r'["\']?webhook_secret["\']?\s*[:=]\s*["\']?[^"\'&\s]+["\']?',
+                re.IGNORECASE,
+            ),
+            'webhook_secret: "***"',
+        ),
         # Password patterns
-        (re.compile(r'["\']?password["\']?\s*[:=]\s*["\']?[^"\'&\s]+["\']?', re.IGNORECASE), 'password: "***"'),
-        (re.compile(r'["\']?pass["\']?\s*[:=]\s*["\']?[^"\'&\s]+["\']?', re.IGNORECASE), 'pass: "***"'),
+        (
+            re.compile(
+                r'["\']?password["\']?\s*[:=]\s*["\']?[^"\'&\s]+["\']?', re.IGNORECASE
+            ),
+            'password: "***"',
+        ),
+        (
+            re.compile(
+                r'["\']?pass["\']?\s*[:=]\s*["\']?[^"\'&\s]+["\']?', re.IGNORECASE
+            ),
+            'pass: "***"',
+        ),
     ]
 
     @classmethod
     def mask_sensitive_data(cls, text: str) -> str:
         """Mask sensitive data in text using predefined patterns.
-        
+
         Args:
             text: Text that may contain sensitive data
-            
+
         Returns:
             Text with sensitive data masked
         """
@@ -62,11 +83,11 @@ class TokenMasker:
     @classmethod
     def mask_url(cls, url: str, token: str = None) -> str:
         """Mask tokens in URLs, especially in authentication sections.
-        
+
         Args:
             url: URL that may contain tokens
             token: Specific token to mask (if known)
-            
+
         Returns:
             URL with tokens masked
         """
@@ -83,8 +104,8 @@ class TokenMasker:
             if parsed.username or parsed.password:
                 # Replace username and password with masked versions
                 netloc = parsed.netloc
-                if '@' in netloc:
-                    auth_part, host_part = netloc.rsplit('@', 1)
+                if "@" in netloc:
+                    auth_part, host_part = netloc.rsplit("@", 1)
                     masked_netloc = f"***:***@{host_part}"
                     parsed = parsed._replace(netloc=masked_netloc)
                     url = urlunparse(parsed)
@@ -98,10 +119,10 @@ class TokenMasker:
     @classmethod
     def mask_dict(cls, data: Dict[str, Any]) -> Dict[str, Any]:
         """Recursively mask sensitive data in dictionary.
-        
+
         Args:
             data: Dictionary that may contain sensitive data
-            
+
         Returns:
             Dictionary with sensitive data masked
         """
@@ -114,8 +135,17 @@ class TokenMasker:
             key_lower = key.lower()
 
             # Keys that should always be masked
-            if any(sensitive_key in key_lower for sensitive_key in
-                   ['token', 'password', 'secret', 'auth', 'key', 'credential']):
+            if any(
+                sensitive_key in key_lower
+                for sensitive_key in [
+                    "token",
+                    "password",
+                    "secret",
+                    "auth",
+                    "key",
+                    "credential",
+                ]
+            ):
                 masked_data[key] = "***"
             elif isinstance(value, dict):
                 masked_data[key] = cls.mask_dict(value)
@@ -131,10 +161,10 @@ class TokenMasker:
     @classmethod
     def mask_list(cls, data: List[Any]) -> List[Any]:
         """Recursively mask sensitive data in list.
-        
+
         Args:
             data: List that may contain sensitive data
-            
+
         Returns:
             List with sensitive data masked
         """
@@ -158,10 +188,10 @@ class TokenMasker:
     @classmethod
     def mask_exception_message(cls, exc: Exception) -> str:
         """Mask sensitive data in exception messages.
-        
+
         Args:
             exc: Exception that may contain sensitive data in its message
-            
+
         Returns:
             Masked exception message
         """
@@ -171,11 +201,11 @@ class TokenMasker:
     @classmethod
     def mask_logging_args(cls, *args, **kwargs) -> tuple:
         """Mask sensitive data in logging arguments.
-        
+
         Args:
             *args: Positional arguments for logging
             **kwargs: Keyword arguments for logging
-            
+
         Returns:
             Tuple of (masked_args, masked_kwargs)
         """

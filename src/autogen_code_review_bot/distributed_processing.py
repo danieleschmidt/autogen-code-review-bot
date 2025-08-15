@@ -28,6 +28,7 @@ metrics = get_metrics_registry()
 
 class TaskPriority(Enum):
     """Task priority levels."""
+
     LOW = 1
     NORMAL = 2
     HIGH = 3
@@ -36,6 +37,7 @@ class TaskPriority(Enum):
 
 class TaskStatus(Enum):
     """Task execution status."""
+
     PENDING = "pending"
     ASSIGNED = "assigned"
     RUNNING = "running"
@@ -48,6 +50,7 @@ class TaskStatus(Enum):
 @dataclass
 class DistributedTask:
     """Represents a distributed task."""
+
     task_id: str
     task_type: str
     payload: Dict[str, Any]
@@ -67,48 +70,59 @@ class DistributedTask:
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
-            'task_id': self.task_id,
-            'task_type': self.task_type,
-            'payload': self.payload,
-            'priority': self.priority.value,
-            'status': self.status.value,
-            'created_at': self.created_at.isoformat(),
-            'assigned_to': self.assigned_to,
-            'started_at': self.started_at.isoformat() if self.started_at else None,
-            'completed_at': self.completed_at.isoformat() if self.completed_at else None,
-            'result': self.result,
-            'error': self.error,
-            'retry_count': self.retry_count,
-            'max_retries': self.max_retries,
-            'timeout_seconds': self.timeout_seconds,
-            'tags': self.tags
+            "task_id": self.task_id,
+            "task_type": self.task_type,
+            "payload": self.payload,
+            "priority": self.priority.value,
+            "status": self.status.value,
+            "created_at": self.created_at.isoformat(),
+            "assigned_to": self.assigned_to,
+            "started_at": self.started_at.isoformat() if self.started_at else None,
+            "completed_at": (
+                self.completed_at.isoformat() if self.completed_at else None
+            ),
+            "result": self.result,
+            "error": self.error,
+            "retry_count": self.retry_count,
+            "max_retries": self.max_retries,
+            "timeout_seconds": self.timeout_seconds,
+            "tags": self.tags,
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'DistributedTask':
+    def from_dict(cls, data: Dict[str, Any]) -> "DistributedTask":
         """Create from dictionary."""
         return cls(
-            task_id=data['task_id'],
-            task_type=data['task_type'],
-            payload=data['payload'],
-            priority=TaskPriority(data['priority']),
-            status=TaskStatus(data['status']),
-            created_at=datetime.fromisoformat(data['created_at']),
-            assigned_to=data.get('assigned_to'),
-            started_at=datetime.fromisoformat(data['started_at']) if data.get('started_at') else None,
-            completed_at=datetime.fromisoformat(data['completed_at']) if data.get('completed_at') else None,
-            result=data.get('result'),
-            error=data.get('error'),
-            retry_count=data.get('retry_count', 0),
-            max_retries=data.get('max_retries', 3),
-            timeout_seconds=data.get('timeout_seconds', 300),
-            tags=data.get('tags', {})
+            task_id=data["task_id"],
+            task_type=data["task_type"],
+            payload=data["payload"],
+            priority=TaskPriority(data["priority"]),
+            status=TaskStatus(data["status"]),
+            created_at=datetime.fromisoformat(data["created_at"]),
+            assigned_to=data.get("assigned_to"),
+            started_at=(
+                datetime.fromisoformat(data["started_at"])
+                if data.get("started_at")
+                else None
+            ),
+            completed_at=(
+                datetime.fromisoformat(data["completed_at"])
+                if data.get("completed_at")
+                else None
+            ),
+            result=data.get("result"),
+            error=data.get("error"),
+            retry_count=data.get("retry_count", 0),
+            max_retries=data.get("max_retries", 3),
+            timeout_seconds=data.get("timeout_seconds", 300),
+            tags=data.get("tags", {}),
         )
 
 
 @dataclass
 class WorkerNode:
     """Represents a worker node in the distributed system."""
+
     node_id: str
     hostname: str
     region: str
@@ -124,46 +138,50 @@ class WorkerNode:
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
-            'node_id': self.node_id,
-            'hostname': self.hostname,
-            'region': self.region,
-            'capabilities': self.capabilities,
-            'max_concurrent_tasks': self.max_concurrent_tasks,
-            'current_load': self.current_load,
-            'last_heartbeat': self.last_heartbeat.isoformat(),
-            'status': self.status,
-            'total_processed': self.total_processed,
-            'total_errors': self.total_errors,
-            'average_processing_time': self.average_processing_time
+            "node_id": self.node_id,
+            "hostname": self.hostname,
+            "region": self.region,
+            "capabilities": self.capabilities,
+            "max_concurrent_tasks": self.max_concurrent_tasks,
+            "current_load": self.current_load,
+            "last_heartbeat": self.last_heartbeat.isoformat(),
+            "status": self.status,
+            "total_processed": self.total_processed,
+            "total_errors": self.total_errors,
+            "average_processing_time": self.average_processing_time,
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'WorkerNode':
+    def from_dict(cls, data: Dict[str, Any]) -> "WorkerNode":
         """Create from dictionary."""
         return cls(
-            node_id=data['node_id'],
-            hostname=data['hostname'],
-            region=data['region'],
-            capabilities=data['capabilities'],
-            max_concurrent_tasks=data.get('max_concurrent_tasks', 10),
-            current_load=data.get('current_load', 0),
-            last_heartbeat=datetime.fromisoformat(data['last_heartbeat']),
-            status=data.get('status', 'active'),
-            total_processed=data.get('total_processed', 0),
-            total_errors=data.get('total_errors', 0),
-            average_processing_time=data.get('average_processing_time', 0.0)
+            node_id=data["node_id"],
+            hostname=data["hostname"],
+            region=data["region"],
+            capabilities=data["capabilities"],
+            max_concurrent_tasks=data.get("max_concurrent_tasks", 10),
+            current_load=data.get("current_load", 0),
+            last_heartbeat=datetime.fromisoformat(data["last_heartbeat"]),
+            status=data.get("status", "active"),
+            total_processed=data.get("total_processed", 0),
+            total_errors=data.get("total_errors", 0),
+            average_processing_time=data.get("average_processing_time", 0.0),
         )
 
     def get_load_percentage(self) -> float:
         """Get current load as percentage."""
-        return (self.current_load / self.max_concurrent_tasks) * 100 if self.max_concurrent_tasks > 0 else 0
+        return (
+            (self.current_load / self.max_concurrent_tasks) * 100
+            if self.max_concurrent_tasks > 0
+            else 0
+        )
 
     def can_accept_task(self) -> bool:
         """Check if node can accept new tasks."""
         return (
-            self.status == "active" and
-            self.current_load < self.max_concurrent_tasks and
-            (datetime.now(timezone.utc) - self.last_heartbeat).seconds < 60
+            self.status == "active"
+            and self.current_load < self.max_concurrent_tasks
+            and (datetime.now(timezone.utc) - self.last_heartbeat).seconds < 60
         )
 
 
@@ -174,14 +192,16 @@ class TaskScheduler:
         self.redis = redis
         self.logger = get_logger(__name__ + ".TaskScheduler")
         self._scheduling_strategies = {
-            'round_robin': self._round_robin_strategy,
-            'least_loaded': self._least_loaded_strategy,
-            'geographic': self._geographic_strategy,
-            'capability_based': self._capability_based_strategy
+            "round_robin": self._round_robin_strategy,
+            "least_loaded": self._least_loaded_strategy,
+            "geographic": self._geographic_strategy,
+            "capability_based": self._capability_based_strategy,
         }
-        self._current_strategy = 'least_loaded'
+        self._current_strategy = "least_loaded"
 
-    async def schedule_task(self, task: DistributedTask, workers: List[WorkerNode]) -> Optional[str]:
+    async def schedule_task(
+        self, task: DistributedTask, workers: List[WorkerNode]
+    ) -> Optional[str]:
         """Schedule task to best available worker."""
         strategy = self._scheduling_strategies[self._current_strategy]
         selected_worker = await strategy(task, workers)
@@ -194,17 +214,22 @@ class TaskScheduler:
             # Update worker load
             selected_worker.current_load += 1
 
-            self.logger.info(f"Task {task.task_id} scheduled to worker {selected_worker.node_id}", extra={
-                'task_type': task.task_type,
-                'worker_load': selected_worker.current_load,
-                'strategy': self._current_strategy
-            })
+            self.logger.info(
+                f"Task {task.task_id} scheduled to worker {selected_worker.node_id}",
+                extra={
+                    "task_type": task.task_type,
+                    "worker_load": selected_worker.current_load,
+                    "strategy": self._current_strategy,
+                },
+            )
 
             return selected_worker.node_id
 
         return None
 
-    async def _round_robin_strategy(self, task: DistributedTask, workers: List[WorkerNode]) -> Optional[WorkerNode]:
+    async def _round_robin_strategy(
+        self, task: DistributedTask, workers: List[WorkerNode]
+    ) -> Optional[WorkerNode]:
         """Round-robin scheduling strategy."""
         available_workers = [w for w in workers if w.can_accept_task()]
         if not available_workers:
@@ -214,7 +239,9 @@ class TaskScheduler:
         index = hash(task.task_id) % len(available_workers)
         return available_workers[index]
 
-    async def _least_loaded_strategy(self, task: DistributedTask, workers: List[WorkerNode]) -> Optional[WorkerNode]:
+    async def _least_loaded_strategy(
+        self, task: DistributedTask, workers: List[WorkerNode]
+    ) -> Optional[WorkerNode]:
         """Least loaded scheduling strategy."""
         available_workers = [w for w in workers if w.can_accept_task()]
         if not available_workers:
@@ -223,33 +250,40 @@ class TaskScheduler:
         # Sort by load percentage
         return min(available_workers, key=lambda w: w.get_load_percentage())
 
-    async def _geographic_strategy(self, task: DistributedTask, workers: List[WorkerNode]) -> Optional[WorkerNode]:
+    async def _geographic_strategy(
+        self, task: DistributedTask, workers: List[WorkerNode]
+    ) -> Optional[WorkerNode]:
         """Geographic affinity scheduling strategy."""
         available_workers = [w for w in workers if w.can_accept_task()]
         if not available_workers:
             return None
 
         # Prefer workers in same region if specified
-        preferred_region = task.tags.get('region')
+        preferred_region = task.tags.get("region")
         if preferred_region:
-            regional_workers = [w for w in available_workers if w.region == preferred_region]
+            regional_workers = [
+                w for w in available_workers if w.region == preferred_region
+            ]
             if regional_workers:
                 return min(regional_workers, key=lambda w: w.get_load_percentage())
 
         # Fallback to least loaded
         return min(available_workers, key=lambda w: w.get_load_percentage())
 
-    async def _capability_based_strategy(self, task: DistributedTask, workers: List[WorkerNode]) -> Optional[WorkerNode]:
+    async def _capability_based_strategy(
+        self, task: DistributedTask, workers: List[WorkerNode]
+    ) -> Optional[WorkerNode]:
         """Capability-based scheduling strategy."""
         available_workers = [w for w in workers if w.can_accept_task()]
         if not available_workers:
             return None
 
         # Filter by required capabilities
-        required_capabilities = task.tags.get('required_capabilities', [])
+        required_capabilities = task.tags.get("required_capabilities", [])
         if required_capabilities:
             capable_workers = [
-                w for w in available_workers
+                w
+                for w in available_workers
                 if all(cap in w.capabilities for cap in required_capabilities)
             ]
             if capable_workers:
@@ -266,7 +300,7 @@ class LoadBalancer:
         self.redis = redis
         self.logger = get_logger(__name__ + ".LoadBalancer")
         self.health_check_interval = 30  # seconds
-        self.scale_check_interval = 60   # seconds
+        self.scale_check_interval = 60  # seconds
         self._monitoring_task: Optional[asyncio.Task] = None
         self._running = False
 
@@ -368,8 +402,10 @@ class LoadBalancer:
                 if task_data:
                     task = DistributedTask.from_dict(json.loads(task_data))
 
-                    if (task.assigned_to == node_id and
-                        task.status in [TaskStatus.ASSIGNED, TaskStatus.RUNNING]):
+                    if task.assigned_to == node_id and task.status in [
+                        TaskStatus.ASSIGNED,
+                        TaskStatus.RUNNING,
+                    ]:
 
                         # Reset task for rescheduling
                         task.assigned_to = None
@@ -378,12 +414,16 @@ class LoadBalancer:
 
                         if task.retry_count <= task.max_retries:
                             await self.redis.set(task_key, json.dumps(task.to_dict()))
-                            self.logger.info(f"Rescheduled task {task.task_id} from offline worker {node_id}")
+                            self.logger.info(
+                                f"Rescheduled task {task.task_id} from offline worker {node_id}"
+                            )
                         else:
                             task.status = TaskStatus.FAILED
                             task.error = f"Max retries exceeded after worker {node_id} went offline"
                             await self.redis.set(task_key, json.dumps(task.to_dict()))
-                            self.logger.error(f"Task {task.task_id} failed after max retries")
+                            self.logger.error(
+                                f"Task {task.task_id} failed after max retries"
+                            )
 
         except Exception as e:
             self.logger.error(f"Error rescheduling tasks from worker {node_id}: {e}")
@@ -400,12 +440,16 @@ class LoadBalancer:
             # Calculate average load
             total_load = sum(w.current_load for w in active_workers)
             total_capacity = sum(w.max_concurrent_tasks for w in active_workers)
-            average_load_percentage = (total_load / total_capacity) * 100 if total_capacity > 0 else 0
+            average_load_percentage = (
+                (total_load / total_capacity) * 100 if total_capacity > 0 else 0
+            )
 
             # Get pending tasks count
             pending_tasks = await self._get_pending_tasks_count()
 
-            self.logger.debug(f"System load: {average_load_percentage:.1f}%, Pending tasks: {pending_tasks}")
+            self.logger.debug(
+                f"System load: {average_load_percentage:.1f}%, Pending tasks: {pending_tasks}"
+            )
 
             # Scale up if load > 80% or many pending tasks
             if average_load_percentage > 80 or pending_tasks > 50:
@@ -434,7 +478,9 @@ class LoadBalancer:
         self.logger.info("Scaling down workers due to low load")
 
         # Record scaling event
-        metrics.record_counter("autoscaling_events_total", 1, tags={"direction": "down"})
+        metrics.record_counter(
+            "autoscaling_events_total", 1, tags={"direction": "down"}
+        )
 
         # In a real implementation, this would gracefully drain and terminate workers
 
@@ -458,7 +504,9 @@ class LoadBalancer:
     async def _update_worker(self, worker: WorkerNode):
         """Update worker information in Redis."""
         try:
-            await self.redis.set(f"worker:{worker.node_id}", json.dumps(worker.to_dict()))
+            await self.redis.set(
+                f"worker:{worker.node_id}", json.dumps(worker.to_dict())
+            )
         except Exception as e:
             self.logger.error(f"Error updating worker {worker.node_id}: {e}")
 
@@ -485,8 +533,12 @@ class LoadBalancer:
 class DistributedTaskManager:
     """Main coordinator for distributed task processing."""
 
-    def __init__(self, redis_url: str = "redis://localhost:6379",
-                 node_id: str = None, region: str = "default"):
+    def __init__(
+        self,
+        redis_url: str = "redis://localhost:6379",
+        node_id: str = None,
+        region: str = "default",
+    ):
         self.redis = Redis.from_url(redis_url, decode_responses=True)
         self.node_id = node_id or f"worker_{uuid.uuid4().hex[:8]}"
         self.region = region
@@ -512,8 +564,9 @@ class DistributedTaskManager:
         self.task_handlers[task_type] = handler
         self.logger.info(f"Registered handler for task type: {task_type}")
 
-    async def start_worker(self, capabilities: List[str] = None,
-                          max_concurrent_tasks: int = 10):
+    async def start_worker(
+        self, capabilities: List[str] = None, max_concurrent_tasks: int = 10
+    ):
         """Start worker node."""
         if self._running:
             return
@@ -525,8 +578,8 @@ class DistributedTaskManager:
             node_id=self.node_id,
             hostname=f"host-{self.node_id}",
             region=self.region,
-            capabilities=capabilities or ['analysis', 'security', 'style'],
-            max_concurrent_tasks=max_concurrent_tasks
+            capabilities=capabilities or ["analysis", "security", "style"],
+            max_concurrent_tasks=max_concurrent_tasks,
         )
 
         # Register worker
@@ -539,11 +592,14 @@ class DistributedTaskManager:
         self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
         self._task_processor_task = asyncio.create_task(self._task_processor_loop())
 
-        self.logger.info(f"Worker node {self.node_id} started", extra={
-            'region': self.region,
-            'capabilities': self.worker_node.capabilities,
-            'max_concurrent_tasks': max_concurrent_tasks
-        })
+        self.logger.info(
+            f"Worker node {self.node_id} started",
+            extra={
+                "region": self.region,
+                "capabilities": self.worker_node.capabilities,
+                "max_concurrent_tasks": max_concurrent_tasks,
+            },
+        )
 
     async def stop_worker(self):
         """Stop worker node gracefully."""
@@ -583,28 +639,34 @@ class DistributedTaskManager:
 
         self.logger.info(f"Worker node {self.node_id} stopped")
 
-    async def submit_task(self, task_type: str, payload: Dict[str, Any],
-                         priority: TaskPriority = TaskPriority.NORMAL,
-                         tags: Dict[str, str] = None) -> str:
+    async def submit_task(
+        self,
+        task_type: str,
+        payload: Dict[str, Any],
+        priority: TaskPriority = TaskPriority.NORMAL,
+        tags: Dict[str, str] = None,
+    ) -> str:
         """Submit task for distributed processing."""
         task = DistributedTask(
             task_id=str(uuid.uuid4()),
             task_type=task_type,
             payload=payload,
             priority=priority,
-            tags=tags or {}
+            tags=tags or {},
         )
 
         # Store task
-        await self.redis.set(f"task:{task.task_id}", json.dumps(task.to_dict()), ex=3600)
+        await self.redis.set(
+            f"task:{task.task_id}", json.dumps(task.to_dict()), ex=3600
+        )
 
         # Add to priority queue
         await self.redis.zadd("task_queue", {task.task_id: priority.value})
 
-        self.logger.info(f"Task {task.task_id} submitted", extra={
-            'task_type': task_type,
-            'priority': priority.name
-        })
+        self.logger.info(
+            f"Task {task.task_id} submitted",
+            extra={"task_type": task_type, "priority": priority.name},
+        )
 
         return task.task_id
 
@@ -620,7 +682,7 @@ class DistributedTaskManager:
         await self.redis.set(
             f"worker:{self.node_id}",
             json.dumps(self.worker_node.to_dict()),
-            ex=120  # Auto-expire in 2 minutes
+            ex=120,  # Auto-expire in 2 minutes
         )
 
     async def _unregister_worker(self):
@@ -632,9 +694,7 @@ class DistributedTaskManager:
         if self.worker_node:
             self.worker_node.last_heartbeat = datetime.now(timezone.utc)
             await self.redis.set(
-                f"worker:{self.node_id}",
-                json.dumps(self.worker_node.to_dict()),
-                ex=120
+                f"worker:{self.node_id}", json.dumps(self.worker_node.to_dict()), ex=120
             )
 
     async def _heartbeat_loop(self):
@@ -653,16 +713,22 @@ class DistributedTaskManager:
             try:
                 # Get available task
                 task = await self._get_next_task()
-                if task and len(self.running_tasks) < self.worker_node.max_concurrent_tasks:
+                if (
+                    task
+                    and len(self.running_tasks) < self.worker_node.max_concurrent_tasks
+                ):
                     # Process task asynchronously
                     task_coroutine = self._process_task(task)
-                    self.running_tasks[task.task_id] = asyncio.create_task(task_coroutine)
+                    self.running_tasks[task.task_id] = asyncio.create_task(
+                        task_coroutine
+                    )
                 else:
                     await asyncio.sleep(1)  # No tasks or at capacity
 
                 # Clean up completed tasks
                 completed_tasks = [
-                    task_id for task_id, task_future in self.running_tasks.items()
+                    task_id
+                    for task_id, task_future in self.running_tasks.items()
                     if task_future.done()
                 ]
 
@@ -719,10 +785,10 @@ class DistributedTaskManager:
         start_time = time.time()
 
         try:
-            self.logger.info(f"Processing task {task.task_id}", extra={
-                'task_type': task.task_type,
-                'worker': self.node_id
-            })
+            self.logger.info(
+                f"Processing task {task.task_id}",
+                extra={"task_type": task.task_type, "worker": self.node_id},
+            )
 
             # Get task handler
             handler = self.task_handlers[task.task_type]
@@ -731,8 +797,7 @@ class DistributedTaskManager:
             try:
                 if asyncio.iscoroutinefunction(handler):
                     result = await asyncio.wait_for(
-                        handler(task.payload),
-                        timeout=task.timeout_seconds
+                        handler(task.payload), timeout=task.timeout_seconds
                     )
                 else:
                     # Run in thread pool
@@ -740,7 +805,7 @@ class DistributedTaskManager:
                         asyncio.get_event_loop().run_in_executor(
                             self.local_executor, handler, task.payload
                         ),
-                        timeout=task.timeout_seconds
+                        timeout=task.timeout_seconds,
                     )
 
                 # Update task with result
@@ -750,23 +815,29 @@ class DistributedTaskManager:
 
                 # Record success metrics
                 processing_time = time.time() - start_time
-                metrics.record_histogram("task_processing_time_seconds", processing_time, tags={
-                    "task_type": task.task_type,
-                    "worker": self.node_id,
-                    "status": "success"
-                })
+                metrics.record_histogram(
+                    "task_processing_time_seconds",
+                    processing_time,
+                    tags={
+                        "task_type": task.task_type,
+                        "worker": self.node_id,
+                        "status": "success",
+                    },
+                )
 
                 # Update worker stats
                 if self.worker_node:
                     self.worker_node.total_processed += 1
                     self.worker_node.average_processing_time = (
-                        (self.worker_node.average_processing_time * (self.worker_node.total_processed - 1) +
-                         processing_time) / self.worker_node.total_processed
-                    )
+                        self.worker_node.average_processing_time
+                        * (self.worker_node.total_processed - 1)
+                        + processing_time
+                    ) / self.worker_node.total_processed
 
-                self.logger.info(f"Task {task.task_id} completed successfully", extra={
-                    'processing_time_seconds': processing_time
-                })
+                self.logger.info(
+                    f"Task {task.task_id} completed successfully",
+                    extra={"processing_time_seconds": processing_time},
+                )
 
             except asyncio.TimeoutError:
                 task.status = TaskStatus.FAILED
@@ -790,7 +861,9 @@ class DistributedTaskManager:
         finally:
             # Update worker load
             if self.worker_node:
-                self.worker_node.current_load = max(0, self.worker_node.current_load - 1)
+                self.worker_node.current_load = max(
+                    0, self.worker_node.current_load - 1
+                )
 
             # Save final task state
             await self.redis.set(f"task:{task.task_id}", json.dumps(task.to_dict()))
@@ -802,27 +875,27 @@ class DistributedTaskManager:
             pending_count = await self.load_balancer._get_pending_tasks_count()
 
             return {
-                'workers': {
-                    'total': len(workers),
-                    'active': len([w for w in workers if w.status == "active"]),
-                    'offline': len([w for w in workers if w.status == "offline"]),
-                    'details': [w.to_dict() for w in workers]
+                "workers": {
+                    "total": len(workers),
+                    "active": len([w for w in workers if w.status == "active"]),
+                    "offline": len([w for w in workers if w.status == "offline"]),
+                    "details": [w.to_dict() for w in workers],
                 },
-                'tasks': {
-                    'pending': pending_count,
-                    'running': len(self.running_tasks),
-                    'queue_size': await self.redis.zcard("task_queue")
+                "tasks": {
+                    "pending": pending_count,
+                    "running": len(self.running_tasks),
+                    "queue_size": await self.redis.zcard("task_queue"),
                 },
-                'system': {
-                    'timestamp': datetime.now(timezone.utc).isoformat(),
-                    'node_id': self.node_id,
-                    'region': self.region
-                }
+                "system": {
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "node_id": self.node_id,
+                    "region": self.region,
+                },
             }
 
         except Exception as e:
             self.logger.error(f"Error getting system status: {e}")
-            return {'error': str(e)}
+            return {"error": str(e)}
 
 
 # Default task handlers
@@ -830,28 +903,29 @@ async def analyze_repository_task(payload: Dict[str, Any]) -> Dict[str, Any]:
     """Task handler for repository analysis."""
     from .pr_analysis import analyze_pr
 
-    repo_path = payload['repo_path']
-    config_path = payload.get('config_path')
+    repo_path = payload["repo_path"]
+    config_path = payload.get("config_path")
 
     # Run analysis
     result = analyze_pr(repo_path, config_path)
 
     return {
-        'analysis_result': {
-            'security': asdict(result.security),
-            'style': asdict(result.style),
-            'performance': asdict(result.performance),
-            'metadata': result.metadata
+        "analysis_result": {
+            "security": asdict(result.security),
+            "style": asdict(result.style),
+            "performance": asdict(result.performance),
+            "metadata": result.metadata,
         }
     }
 
 
-def create_distributed_manager(redis_url: str = "redis://localhost:6379",
-                              region: str = "default") -> DistributedTaskManager:
+def create_distributed_manager(
+    redis_url: str = "redis://localhost:6379", region: str = "default"
+) -> DistributedTaskManager:
     """Create and configure distributed task manager."""
     manager = DistributedTaskManager(redis_url=redis_url, region=region)
 
     # Register default task handlers
-    manager.register_task_handler('analyze_repository', analyze_repository_task)
+    manager.register_task_handler("analyze_repository", analyze_repository_task)
 
     return manager

@@ -17,6 +17,7 @@ metrics = get_metrics_registry()
 
 class LoadBalancingStrategy(Enum):
     """Load balancing strategies."""
+
     ROUND_ROBIN = "round_robin"
     LEAST_CONNECTIONS = "least_connections"
     WEIGHTED_ROUND_ROBIN = "weighted_round_robin"
@@ -28,6 +29,7 @@ class LoadBalancingStrategy(Enum):
 @dataclass
 class WorkerNode:
     """Represents a worker node in the load balancer."""
+
     id: str
     endpoint: str
     weight: float
@@ -52,14 +54,22 @@ class WorkerNode:
     def load_score(self) -> float:
         """Calculate load score (lower is better)."""
         if not self.is_healthy:
-            return float('inf')
+            return float("inf")
 
         # Combine multiple factors into load score
-        connection_load = self.current_connections / self.max_connections if self.max_connections > 0 else 0
+        connection_load = (
+            self.current_connections / self.max_connections
+            if self.max_connections > 0
+            else 0
+        )
         resource_load = (self.cpu_usage + self.memory_usage) / 2
-        response_time_factor = min(self.avg_response_time / 1000, 2.0)  # Cap at 2 seconds
+        response_time_factor = min(
+            self.avg_response_time / 1000, 2.0
+        )  # Cap at 2 seconds
 
-        return (connection_load * 0.4 + resource_load * 0.3 + response_time_factor * 0.3) / self.weight
+        return (
+            connection_load * 0.4 + resource_load * 0.3 + response_time_factor * 0.3
+        ) / self.weight
 
 
 class HealthChecker:
@@ -67,7 +77,7 @@ class HealthChecker:
 
     def __init__(self, check_interval: float = 30.0, timeout: float = 5.0):
         """Initialize health checker.
-        
+
         Args:
             check_interval: Interval between health checks in seconds
             timeout: Timeout for health check requests
@@ -81,7 +91,7 @@ class HealthChecker:
 
     def start(self, nodes: List[WorkerNode]):
         """Start health checking.
-        
+
         Args:
             nodes: List of worker nodes to monitor
         """
@@ -121,22 +131,27 @@ class HealthChecker:
                 # Log status changes
                 if old_status != is_healthy:
                     status = "healthy" if is_healthy else "unhealthy"
-                    logger.warning("Node health status changed",
-                                 node_id=node.id,
-                                 status=status)
-                    metrics.record_counter("load_balancer_health_changes", 1,
-                                         tags={"node_id": node.id, "status": status})
+                    logger.warning(
+                        "Node health status changed", node_id=node.id, status=status
+                    )
+                    metrics.record_counter(
+                        "load_balancer_health_changes",
+                        1,
+                        tags={"node_id": node.id, "status": status},
+                    )
 
             except Exception as e:
-                logger.error("Failed to check node health", node_id=node.id, error=str(e))
+                logger.error(
+                    "Failed to check node health", node_id=node.id, error=str(e)
+                )
                 node.is_healthy = False
 
     def _check_node_health(self, node: WorkerNode) -> bool:
         """Check health of a single node.
-        
+
         Args:
             node: Worker node to check
-            
+
         Returns:
             True if node is healthy
         """
@@ -167,10 +182,13 @@ class HealthChecker:
 class LoadBalancer:
     """Advanced load balancer with multiple strategies and health checking."""
 
-    def __init__(self, strategy: LoadBalancingStrategy = LoadBalancingStrategy.LEAST_CONNECTIONS,
-                 health_check_interval: float = 30.0):
+    def __init__(
+        self,
+        strategy: LoadBalancingStrategy = LoadBalancingStrategy.LEAST_CONNECTIONS,
+        health_check_interval: float = 30.0,
+    ):
         """Initialize load balancer.
-        
+
         Args:
             strategy: Load balancing strategy
             health_check_interval: Health check interval in seconds
@@ -193,13 +211,15 @@ class LoadBalancer:
 
     def add_node(self, node: WorkerNode):
         """Add a worker node.
-        
+
         Args:
             node: Worker node to add
         """
         with self._lock:
             self._nodes.append(node)
-            self._response_times[node.id] = deque(maxlen=100)  # Keep last 100 response times
+            self._response_times[node.id] = deque(
+                maxlen=100
+            )  # Keep last 100 response times
 
             # Update hash ring for consistent hashing
             if self.strategy == LoadBalancingStrategy.CONSISTENT_HASH:
@@ -210,7 +230,7 @@ class LoadBalancer:
 
     def remove_node(self, node_id: str):
         """Remove a worker node.
-        
+
         Args:
             node_id: ID of node to remove
         """
@@ -239,10 +259,10 @@ class LoadBalancer:
 
     def get_next_node(self, request_key: Optional[str] = None) -> Optional[WorkerNode]:
         """Get next worker node based on load balancing strategy.
-        
+
         Args:
             request_key: Optional key for consistent hashing
-            
+
         Returns:
             Selected worker node or None if no healthy nodes available
         """
@@ -274,14 +294,17 @@ class LoadBalancer:
             if node:
                 node.current_connections += 1
                 node.total_requests += 1
-                metrics.record_counter("load_balancer_requests", 1,
-                                     tags={"node_id": node.id, "strategy": self.strategy.value})
+                metrics.record_counter(
+                    "load_balancer_requests",
+                    1,
+                    tags={"node_id": node.id, "strategy": self.strategy.value},
+                )
 
             return node
 
     def record_response(self, node_id: str, response_time: float, success: bool):
         """Record response metrics for a node.
-        
+
         Args:
             node_id: ID of the node
             response_time: Response time in seconds
@@ -299,23 +322,29 @@ class LoadBalancer:
                     # Update average response time
                     if node_id in self._response_times:
                         self._response_times[node_id].append(response_time)
-                        node.avg_response_time = sum(self._response_times[node_id]) / len(self._response_times[node_id])
+                        node.avg_response_time = sum(
+                            self._response_times[node_id]
+                        ) / len(self._response_times[node_id])
 
                     break
 
         # Record metrics
         status = "success" if success else "error"
-        metrics.record_histogram("load_balancer_response_time", response_time,
-                               tags={"node_id": node_id, "status": status})
-        metrics.record_counter("load_balancer_responses", 1,
-                             tags={"node_id": node_id, "status": status})
+        metrics.record_histogram(
+            "load_balancer_response_time",
+            response_time,
+            tags={"node_id": node_id, "status": status},
+        )
+        metrics.record_counter(
+            "load_balancer_responses", 1, tags={"node_id": node_id, "status": status}
+        )
 
     def _round_robin_selection(self, nodes: List[WorkerNode]) -> WorkerNode:
         """Round robin selection.
-        
+
         Args:
             nodes: List of healthy nodes
-            
+
         Returns:
             Selected node
         """
@@ -325,10 +354,10 @@ class LoadBalancer:
 
     def _least_connections_selection(self, nodes: List[WorkerNode]) -> WorkerNode:
         """Least connections selection.
-        
+
         Args:
             nodes: List of healthy nodes
-            
+
         Returns:
             Node with least connections
         """
@@ -336,10 +365,10 @@ class LoadBalancer:
 
     def _weighted_round_robin_selection(self, nodes: List[WorkerNode]) -> WorkerNode:
         """Weighted round robin selection.
-        
+
         Args:
             nodes: List of healthy nodes
-            
+
         Returns:
             Selected node based on weights
         """
@@ -355,10 +384,10 @@ class LoadBalancer:
 
     def _least_response_time_selection(self, nodes: List[WorkerNode]) -> WorkerNode:
         """Least response time selection.
-        
+
         Args:
             nodes: List of healthy nodes
-            
+
         Returns:
             Node with lowest average response time
         """
@@ -366,23 +395,24 @@ class LoadBalancer:
 
     def _resource_based_selection(self, nodes: List[WorkerNode]) -> WorkerNode:
         """Resource-based selection using load scores.
-        
+
         Args:
             nodes: List of healthy nodes
-            
+
         Returns:
             Node with lowest load score
         """
         return min(nodes, key=lambda n: n.load_score)
 
-    def _consistent_hash_selection(self, nodes: List[WorkerNode],
-                                 request_key: Optional[str]) -> WorkerNode:
+    def _consistent_hash_selection(
+        self, nodes: List[WorkerNode], request_key: Optional[str]
+    ) -> WorkerNode:
         """Consistent hash selection.
-        
+
         Args:
             nodes: List of healthy nodes
             request_key: Key for consistent hashing
-            
+
         Returns:
             Consistently selected node
         """
@@ -419,25 +449,27 @@ class LoadBalancer:
 
     def get_stats(self) -> Dict[str, Any]:
         """Get load balancer statistics.
-        
+
         Returns:
             Statistics dictionary
         """
         with self._lock:
             node_stats = []
             for node in self._nodes:
-                node_stats.append({
-                    "id": node.id,
-                    "endpoint": node.endpoint,
-                    "is_healthy": node.is_healthy,
-                    "current_connections": node.current_connections,
-                    "total_requests": node.total_requests,
-                    "success_rate": node.success_rate,
-                    "avg_response_time": node.avg_response_time,
-                    "load_score": node.load_score,
-                    "cpu_usage": node.cpu_usage,
-                    "memory_usage": node.memory_usage
-                })
+                node_stats.append(
+                    {
+                        "id": node.id,
+                        "endpoint": node.endpoint,
+                        "is_healthy": node.is_healthy,
+                        "current_connections": node.current_connections,
+                        "total_requests": node.total_requests,
+                        "success_rate": node.success_rate,
+                        "avg_response_time": node.avg_response_time,
+                        "load_score": node.load_score,
+                        "cpu_usage": node.cpu_usage,
+                        "memory_usage": node.memory_usage,
+                    }
+                )
 
             healthy_count = sum(1 for node in self._nodes if node.is_healthy)
 
@@ -445,18 +477,23 @@ class LoadBalancer:
                 "strategy": self.strategy.value,
                 "total_nodes": len(self._nodes),
                 "healthy_nodes": healthy_count,
-                "nodes": node_stats
+                "nodes": node_stats,
             }
 
 
 class AutoScaler:
     """Auto-scaling system for dynamic resource management."""
 
-    def __init__(self, min_nodes: int = 2, max_nodes: int = 10,
-                 scale_up_threshold: float = 0.8, scale_down_threshold: float = 0.3,
-                 scale_cooldown: float = 300):
+    def __init__(
+        self,
+        min_nodes: int = 2,
+        max_nodes: int = 10,
+        scale_up_threshold: float = 0.8,
+        scale_down_threshold: float = 0.3,
+        scale_cooldown: float = 300,
+    ):
         """Initialize auto-scaler.
-        
+
         Args:
             min_nodes: Minimum number of nodes
             max_nodes: Maximum number of nodes
@@ -477,13 +514,11 @@ class AutoScaler:
         self._node_factory: Optional[Callable[[], WorkerNode]] = None
         self._load_balancer: Optional[LoadBalancer] = None
 
-        logger.info("Auto-scaler initialized",
-                   min_nodes=min_nodes,
-                   max_nodes=max_nodes)
+        logger.info("Auto-scaler initialized", min_nodes=min_nodes, max_nodes=max_nodes)
 
     def set_node_factory(self, factory: Callable[[], WorkerNode]):
         """Set factory function for creating new nodes.
-        
+
         Args:
             factory: Function that creates new worker nodes
         """
@@ -491,7 +526,7 @@ class AutoScaler:
 
     def set_load_balancer(self, load_balancer: LoadBalancer):
         """Set load balancer to manage.
-        
+
         Args:
             load_balancer: Load balancer instance
         """
@@ -551,7 +586,7 @@ class AutoScaler:
 
     def _calculate_load(self) -> Dict[str, float]:
         """Calculate current system load.
-        
+
         Returns:
             Load statistics
         """
@@ -560,15 +595,21 @@ class AutoScaler:
         if lb_stats["healthy_nodes"] == 0:
             return {"avg_load": 0.0, "healthy_nodes": 0, "total_connections": 0}
 
-        total_connections = sum(node["current_connections"] for node in lb_stats["nodes"] if node["is_healthy"])
-        total_capacity = sum(50 for node in lb_stats["nodes"] if node["is_healthy"])  # Assume 50 connections per node
+        total_connections = sum(
+            node["current_connections"]
+            for node in lb_stats["nodes"]
+            if node["is_healthy"]
+        )
+        total_capacity = sum(
+            50 for node in lb_stats["nodes"] if node["is_healthy"]
+        )  # Assume 50 connections per node
 
         avg_load = total_connections / total_capacity if total_capacity > 0 else 0.0
 
         return {
             "avg_load": avg_load,
             "healthy_nodes": lb_stats["healthy_nodes"],
-            "total_connections": total_connections
+            "total_connections": total_connections,
         }
 
     def _scale_up(self):
@@ -579,7 +620,9 @@ class AutoScaler:
             self._last_scale_time = time.time()
 
             logger.info("Scaled up", new_node_id=new_node.id)
-            metrics.record_counter("autoscaler_scale_events", 1, tags={"direction": "up"})
+            metrics.record_counter(
+                "autoscaler_scale_events", 1, tags={"direction": "up"}
+            )
 
         except Exception as e:
             logger.error("Failed to scale up", error=str(e))
@@ -590,24 +633,30 @@ class AutoScaler:
             lb_stats = self._load_balancer.get_stats()
 
             # Find node with least connections to remove
-            nodes_to_consider = [node for node in lb_stats["nodes"] if node["is_healthy"]]
+            nodes_to_consider = [
+                node for node in lb_stats["nodes"] if node["is_healthy"]
+            ]
             if len(nodes_to_consider) <= self.min_nodes:
                 return
 
-            node_to_remove = min(nodes_to_consider, key=lambda n: n["current_connections"])
+            node_to_remove = min(
+                nodes_to_consider, key=lambda n: n["current_connections"]
+            )
 
             self._load_balancer.remove_node(node_to_remove["id"])
             self._last_scale_time = time.time()
 
             logger.info("Scaled down", removed_node_id=node_to_remove["id"])
-            metrics.record_counter("autoscaler_scale_events", 1, tags={"direction": "down"})
+            metrics.record_counter(
+                "autoscaler_scale_events", 1, tags={"direction": "down"}
+            )
 
         except Exception as e:
             logger.error("Failed to scale down", error=str(e))
 
     def get_stats(self) -> Dict[str, Any]:
         """Get auto-scaler statistics.
-        
+
         Returns:
             Statistics dictionary
         """
@@ -620,7 +669,7 @@ class AutoScaler:
             "scale_down_threshold": self.scale_down_threshold,
             "last_scale_time": self._last_scale_time,
             "recent_loads": recent_loads,
-            "running": self._running
+            "running": self._running,
         }
 
 
