@@ -6,31 +6,28 @@ This module provides the main analysis functionality for pull requests,
 integrating multiple linting tools, security scanners, and AI agents.
 """
 
-import os
-import subprocess
-import tempfile
-import shutil
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Optional
 
-import yaml
-
-from .agents import load_agents_from_yaml, run_dual_review
 from .enhanced_agents import run_enhanced_dual_review
-from .robust_analysis_helpers import run_security_analysis, run_style_analysis, run_performance_analysis, is_ignored_path
-from .robust_error_handling import robust_operation, ErrorSeverity, validate_file_path, health_checker
 from .exceptions import AnalysisError
 from .language_detection import detect_language
 from .linter_config import LinterConfig
 from .logging_config import get_logger
 from .metrics import get_metrics_registry
-from .models import AnalysisSection, PRAnalysisResult
+from .models import PRAnalysisResult
+from .robust_analysis_helpers import (
+    is_ignored_path,
+    run_performance_analysis,
+    run_security_analysis,
+    run_style_analysis,
+)
+from .robust_error_handling import ErrorSeverity, robust_operation, validate_file_path
 
 logger = get_logger(__name__)
 metrics = get_metrics_registry()
-
 
 
 @robust_operation(
@@ -38,36 +35,41 @@ metrics = get_metrics_registry()
     operation="full_analysis",
     severity=ErrorSeverity.HIGH,
     retry_count=1,
-    raise_on_failure=True
+    raise_on_failure=True,
 )
-def analyze_pr(repo_path: str,
-               config_path: Optional[str] = None,
-               use_cache: bool = True,
-               use_parallel: bool = True) -> PRAnalysisResult:
+def analyze_pr(
+    repo_path: str,
+    config_path: Optional[str] = None,
+    use_cache: bool = True,
+    use_parallel: bool = True,
+) -> PRAnalysisResult:
     """
     Comprehensive PR analysis with security, style, and performance checks.
-    
+
     Args:
         repo_path: Path to repository to analyze
         config_path: Optional path to linter configuration
         use_cache: Whether to use caching for linter results
         use_parallel: Whether to run analysis in parallel
-    
+
     Returns:
         PRAnalysisResult with analysis sections
     """
     start_time = datetime.now(timezone.utc)
-    
+
     # Validate inputs
     validate_file_path(repo_path)
 
     try:
-        logger.info("Starting PR analysis", extra={
-            "repo_path": repo_path,
-            "config_path": config_path,
-            "use_cache": use_cache,
-            "use_parallel": use_parallel
-        })
+        logger.info(
+            "Starting PR analysis",
+            extra={
+                "repo_path": repo_path,
+                "config_path": config_path,
+                "use_cache": use_cache,
+                "use_parallel": use_parallel,
+            },
+        )
 
         # Real implementation for Generation 1
         repo_path_obj = Path(repo_path)
@@ -75,29 +77,39 @@ def analyze_pr(repo_path: str,
             raise AnalysisError(f"Repository path does not exist: {repo_path}")
 
         # Detect languages in the repository
-        all_files = list(repo_path_obj.rglob('*'))
-        code_files = [str(f) for f in all_files if f.is_file() and not is_ignored_path(f)]
+        all_files = list(repo_path_obj.rglob("*"))
+        code_files = [
+            str(f) for f in all_files if f.is_file() and not is_ignored_path(f)
+        ]
         detected_languages = detect_language(code_files)
-        
+
         logger.info(f"Detected languages: {detected_languages}")
-        
+
         # Load linter configuration
         linter_config = load_linter_config(config_path)
-        
+
         if use_parallel and len(detected_languages) > 1:
             # Parallel execution
             with ThreadPoolExecutor(max_workers=3) as executor:
-                security_future = executor.submit(run_security_analysis, repo_path, detected_languages)
-                style_future = executor.submit(run_style_analysis, repo_path, detected_languages, linter_config)
-                performance_future = executor.submit(run_performance_analysis, repo_path, detected_languages)
-                
+                security_future = executor.submit(
+                    run_security_analysis, repo_path, detected_languages
+                )
+                style_future = executor.submit(
+                    run_style_analysis, repo_path, detected_languages, linter_config
+                )
+                performance_future = executor.submit(
+                    run_performance_analysis, repo_path, detected_languages
+                )
+
                 security_result = security_future.result()
                 style_result = style_future.result()
                 performance_result = performance_future.result()
         else:
             # Sequential execution
             security_result = run_security_analysis(repo_path, detected_languages)
-            style_result = run_style_analysis(repo_path, detected_languages, linter_config)
+            style_result = run_style_analysis(
+                repo_path, detected_languages, linter_config
+            )
             performance_result = run_performance_analysis(repo_path, detected_languages)
 
         # Create analysis result
@@ -108,15 +120,18 @@ def analyze_pr(repo_path: str,
             metadata={
                 "analysis_timestamp": start_time.isoformat(),
                 "repo_path": repo_path,
-                "analysis_duration": (datetime.now(timezone.utc) - start_time).total_seconds(),
+                "analysis_duration": (
+                    datetime.now(timezone.utc) - start_time
+                ).total_seconds(),
                 "cache_used": use_cache,
-                "parallel_execution": use_parallel
-            }
+                "parallel_execution": use_parallel,
+            },
         )
 
-        logger.info("PR analysis completed successfully", extra={
-            "duration_seconds": result.metadata["analysis_duration"]
-        })
+        logger.info(
+            "PR analysis completed successfully",
+            extra={"duration_seconds": result.metadata["analysis_duration"]},
+        )
 
         return result
 
@@ -136,7 +151,9 @@ def load_linter_config(config_path: Optional[str] = None) -> LinterConfig:
     return LinterConfig()
 
 
-def format_analysis_with_agents(result: PRAnalysisResult, agent_config_path: str) -> str:
+def format_analysis_with_agents(
+    result: PRAnalysisResult, agent_config_path: str
+) -> str:
     """Format analysis results using enhanced AI agent conversation."""
     try:
         # Prepare analysis summary for agents

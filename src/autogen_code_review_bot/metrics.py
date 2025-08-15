@@ -28,6 +28,7 @@ logger = get_request_logger(__name__)
 
 class MetricType:
     """Enum for metric types."""
+
     COUNTER = "counter"
     GAUGE = "gauge"
     HISTOGRAM = "histogram"
@@ -36,6 +37,7 @@ class MetricType:
 @dataclass
 class MetricSample:
     """A single metric sample with labels."""
+
     value: Union[int, float]
     labels: Dict[str, str] = field(default_factory=dict)
     timestamp: float = field(default_factory=time.time)
@@ -46,7 +48,7 @@ class BaseMetric:
 
     def __init__(self, name: str, description: str, labels: Optional[List[str]] = None):
         """Initialize base metric.
-        
+
         Args:
             name: Metric name.
             description: Metric description.
@@ -59,10 +61,10 @@ class BaseMetric:
 
     def _validate_labels(self, labels: Optional[Dict[str, str]]) -> Dict[str, str]:
         """Validate and normalize labels.
-        
+
         Args:
             labels: Label dictionary to validate.
-            
+
         Returns:
             Validated label dictionary.
         """
@@ -90,9 +92,11 @@ class Counter(BaseMetric):
         with self._lock:
             return sum(self._values.values())
 
-    def increment(self, value: int = 1, labels: Optional[Dict[str, str]] = None) -> None:
+    def increment(
+        self, value: int = 1, labels: Optional[Dict[str, str]] = None
+    ) -> None:
         """Increment counter.
-        
+
         Args:
             value: Value to increment by (must be positive).
             labels: Labels for this increment.
@@ -108,10 +112,10 @@ class Counter(BaseMetric):
 
     def get_value(self, labels: Optional[Dict[str, str]] = None) -> int:
         """Get value for specific label combination.
-        
+
         Args:
             labels: Labels to get value for.
-            
+
         Returns:
             Value for the label combination.
         """
@@ -123,7 +127,7 @@ class Counter(BaseMetric):
 
     def get_all_samples(self) -> List[MetricSample]:
         """Get all samples with their labels.
-        
+
         Returns:
             List of metric samples.
         """
@@ -149,9 +153,11 @@ class Gauge(BaseMetric):
         with self._lock:
             return sum(self._values.values())
 
-    def set(self, value: Union[int, float], labels: Optional[Dict[str, str]] = None) -> None:
+    def set(
+        self, value: Union[int, float], labels: Optional[Dict[str, str]] = None
+    ) -> None:
         """Set gauge value.
-        
+
         Args:
             value: Value to set.
             labels: Labels for this value.
@@ -162,9 +168,11 @@ class Gauge(BaseMetric):
         with self._lock:
             self._values[label_key] = float(value)
 
-    def increment(self, value: Union[int, float] = 1, labels: Optional[Dict[str, str]] = None) -> None:
+    def increment(
+        self, value: Union[int, float] = 1, labels: Optional[Dict[str, str]] = None
+    ) -> None:
         """Increment gauge value.
-        
+
         Args:
             value: Value to increment by.
             labels: Labels for this increment.
@@ -175,9 +183,11 @@ class Gauge(BaseMetric):
         with self._lock:
             self._values[label_key] += value
 
-    def decrement(self, value: Union[int, float] = 1, labels: Optional[Dict[str, str]] = None) -> None:
+    def decrement(
+        self, value: Union[int, float] = 1, labels: Optional[Dict[str, str]] = None
+    ) -> None:
         """Decrement gauge value.
-        
+
         Args:
             value: Value to decrement by.
             labels: Labels for this decrement.
@@ -186,10 +196,10 @@ class Gauge(BaseMetric):
 
     def get_value(self, labels: Optional[Dict[str, str]] = None) -> float:
         """Get value for specific label combination.
-        
+
         Args:
             labels: Labels to get value for.
-            
+
         Returns:
             Value for the label combination.
         """
@@ -201,7 +211,7 @@ class Gauge(BaseMetric):
 
     def get_all_samples(self) -> List[MetricSample]:
         """Get all samples with their labels.
-        
+
         Returns:
             List of metric samples.
         """
@@ -216,12 +226,30 @@ class Gauge(BaseMetric):
 class Histogram(BaseMetric):
     """Histogram metric for tracking distributions."""
 
-    DEFAULT_BUCKETS = [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, float('inf')]
+    DEFAULT_BUCKETS = [
+        0.005,
+        0.01,
+        0.025,
+        0.05,
+        0.1,
+        0.25,
+        0.5,
+        1.0,
+        2.5,
+        5.0,
+        10.0,
+        float("inf"),
+    ]
 
-    def __init__(self, name: str, description: str, buckets: Optional[List[float]] = None,
-                 labels: Optional[List[str]] = None):
+    def __init__(
+        self,
+        name: str,
+        description: str,
+        buckets: Optional[List[float]] = None,
+        labels: Optional[List[str]] = None,
+    ):
         """Initialize histogram metric.
-        
+
         Args:
             name: Metric name.
             description: Metric description.
@@ -230,7 +258,9 @@ class Histogram(BaseMetric):
         """
         super().__init__(name, description, labels)
         self.buckets = sorted(buckets or self.DEFAULT_BUCKETS)
-        self._counts: Dict[tuple, Dict[float, int]] = defaultdict(lambda: defaultdict(int))
+        self._counts: Dict[tuple, Dict[float, int]] = defaultdict(
+            lambda: defaultdict(int)
+        )
         self._sums: Dict[tuple, float] = defaultdict(float)
         self._observation_counts: Dict[tuple, int] = defaultdict(int)
 
@@ -248,7 +278,7 @@ class Histogram(BaseMetric):
 
     def observe(self, value: float, labels: Optional[Dict[str, str]] = None) -> None:
         """Observe a value.
-        
+
         Args:
             value: Value to observe.
             labels: Labels for this observation.
@@ -266,12 +296,14 @@ class Histogram(BaseMetric):
                 if value <= bucket:
                     self._counts[label_key][bucket] += 1
 
-    def get_bucket_counts(self, labels: Optional[Dict[str, str]] = None) -> Dict[float, int]:
+    def get_bucket_counts(
+        self, labels: Optional[Dict[str, str]] = None
+    ) -> Dict[float, int]:
         """Get bucket counts for specific labels.
-        
+
         Args:
             labels: Labels to get counts for.
-            
+
         Returns:
             Dictionary mapping bucket upper bounds to counts.
         """
@@ -283,7 +315,7 @@ class Histogram(BaseMetric):
 
     def get_all_samples(self) -> List[MetricSample]:
         """Get all samples including bucket counts.
-        
+
         Returns:
             List of metric samples.
         """
@@ -294,22 +326,22 @@ class Histogram(BaseMetric):
                 labels = dict(label_key)
 
                 # Add count and sum samples
-                samples.append(MetricSample(
-                    value=self._observation_counts[label_key],
-                    labels={**labels, "type": "count"}
-                ))
-                samples.append(MetricSample(
-                    value=self._sums[label_key],
-                    labels={**labels, "type": "sum"}
-                ))
+                samples.append(
+                    MetricSample(
+                        value=self._observation_counts[label_key],
+                        labels={**labels, "type": "count"},
+                    )
+                )
+                samples.append(
+                    MetricSample(
+                        value=self._sums[label_key], labels={**labels, "type": "sum"}
+                    )
+                )
 
                 # Add bucket samples
                 for bucket, count in self._counts[label_key].items():
                     bucket_labels = {**labels, "le": str(bucket)}
-                    samples.append(MetricSample(
-                        value=count,
-                        labels=bucket_labels
-                    ))
+                    samples.append(MetricSample(value=count, labels=bucket_labels))
 
             return samples
 
@@ -319,7 +351,7 @@ class Timer:
 
     def __init__(self, histogram: Histogram, labels: Optional[Dict[str, str]] = None):
         """Initialize timer.
-        
+
         Args:
             histogram: Histogram to record timing to.
             labels: Labels for the timing.
@@ -342,20 +374,23 @@ class Timer:
     @classmethod
     def decorator(cls, histogram: Histogram, labels: Optional[Dict[str, str]] = None):
         """Create a decorator for timing functions.
-        
+
         Args:
             histogram: Histogram to record timing to.
             labels: Labels for the timing.
-            
+
         Returns:
             Decorator function.
         """
+
         def decorator(func):
             @wraps(func)
             def wrapper(*args, **kwargs):
                 with cls(histogram, labels):
                     return func(*args, **kwargs)
+
             return wrapper
+
         return decorator
 
 
@@ -367,14 +402,16 @@ class MetricsRegistry:
         self._metrics: Dict[str, BaseMetric] = {}
         self._lock = threading.RLock()
 
-    def counter(self, name: str, description: str, labels: Optional[List[str]] = None) -> Counter:
+    def counter(
+        self, name: str, description: str, labels: Optional[List[str]] = None
+    ) -> Counter:
         """Get or create a counter metric.
-        
+
         Args:
             name: Metric name.
             description: Metric description.
             labels: List of label names.
-            
+
         Returns:
             Counter metric.
         """
@@ -382,21 +419,25 @@ class MetricsRegistry:
             if name in self._metrics:
                 metric = self._metrics[name]
                 if not isinstance(metric, Counter):
-                    raise ValueError(f"Metric {name} already exists as {type(metric).__name__}")
+                    raise ValueError(
+                        f"Metric {name} already exists as {type(metric).__name__}"
+                    )
                 return metric
 
             counter = Counter(name, description, labels)
             self._metrics[name] = counter
             return counter
 
-    def gauge(self, name: str, description: str, labels: Optional[List[str]] = None) -> Gauge:
+    def gauge(
+        self, name: str, description: str, labels: Optional[List[str]] = None
+    ) -> Gauge:
         """Get or create a gauge metric.
-        
+
         Args:
             name: Metric name.
             description: Metric description.
             labels: List of label names.
-            
+
         Returns:
             Gauge metric.
         """
@@ -404,23 +445,30 @@ class MetricsRegistry:
             if name in self._metrics:
                 metric = self._metrics[name]
                 if not isinstance(metric, Gauge):
-                    raise ValueError(f"Metric {name} already exists as {type(metric).__name__}")
+                    raise ValueError(
+                        f"Metric {name} already exists as {type(metric).__name__}"
+                    )
                 return metric
 
             gauge = Gauge(name, description, labels)
             self._metrics[name] = gauge
             return gauge
 
-    def histogram(self, name: str, description: str, buckets: Optional[List[float]] = None,
-                  labels: Optional[List[str]] = None) -> Histogram:
+    def histogram(
+        self,
+        name: str,
+        description: str,
+        buckets: Optional[List[float]] = None,
+        labels: Optional[List[str]] = None,
+    ) -> Histogram:
         """Get or create a histogram metric.
-        
+
         Args:
             name: Metric name.
             description: Metric description.
             buckets: Histogram buckets.
             labels: List of label names.
-            
+
         Returns:
             Histogram metric.
         """
@@ -428,7 +476,9 @@ class MetricsRegistry:
             if name in self._metrics:
                 metric = self._metrics[name]
                 if not isinstance(metric, Histogram):
-                    raise ValueError(f"Metric {name} already exists as {type(metric).__name__}")
+                    raise ValueError(
+                        f"Metric {name} already exists as {type(metric).__name__}"
+                    )
                 return metric
 
             histogram = Histogram(name, description, buckets, labels)
@@ -437,10 +487,10 @@ class MetricsRegistry:
 
     def get_metric(self, name: str) -> Optional[BaseMetric]:
         """Get metric by name.
-        
+
         Args:
             name: Metric name.
-            
+
         Returns:
             Metric or None if not found.
         """
@@ -449,7 +499,7 @@ class MetricsRegistry:
 
     def get_all_metrics(self) -> Dict[str, BaseMetric]:
         """Get all registered metrics.
-        
+
         Returns:
             Dictionary of all metrics.
         """
@@ -462,10 +512,10 @@ class MetricsExporter:
 
     def export(self, registry: MetricsRegistry) -> str:
         """Export metrics from registry.
-        
+
         Args:
             registry: Metrics registry to export.
-            
+
         Returns:
             Exported metrics as string.
         """
@@ -477,10 +527,10 @@ class JSONExporter(MetricsExporter):
 
     def export(self, registry: MetricsRegistry) -> str:
         """Export metrics in JSON format.
-        
+
         Args:
             registry: Metrics registry to export.
-            
+
         Returns:
             JSON string of metrics.
         """
@@ -491,27 +541,31 @@ class JSONExporter(MetricsExporter):
                 "name": metric.name,
                 "description": metric.description,
                 "type": type(metric).__name__.lower(),
-                "samples": []
+                "samples": [],
             }
 
             if isinstance(metric, (Counter, Gauge)):
                 metric_info["value"] = metric.value
                 for sample in metric.get_all_samples():
-                    metric_info["samples"].append({
-                        "value": sample.value,
-                        "labels": sample.labels,
-                        "timestamp": sample.timestamp
-                    })
+                    metric_info["samples"].append(
+                        {
+                            "value": sample.value,
+                            "labels": sample.labels,
+                            "timestamp": sample.timestamp,
+                        }
+                    )
             elif isinstance(metric, Histogram):
                 metric_info["count"] = metric.count
                 metric_info["sum"] = metric.sum
                 metric_info["buckets"] = metric.buckets
                 for sample in metric.get_all_samples():
-                    metric_info["samples"].append({
-                        "value": sample.value,
-                        "labels": sample.labels,
-                        "timestamp": sample.timestamp
-                    })
+                    metric_info["samples"].append(
+                        {
+                            "value": sample.value,
+                            "labels": sample.labels,
+                            "timestamp": sample.timestamp,
+                        }
+                    )
 
             metrics_data[name] = metric_info
 
@@ -523,10 +577,10 @@ class PrometheusExporter(MetricsExporter):
 
     def export(self, registry: MetricsRegistry) -> str:
         """Export metrics in Prometheus format.
-        
+
         Args:
             registry: Metrics registry to export.
-            
+
         Returns:
             Prometheus format string.
         """
@@ -553,11 +607,15 @@ class PrometheusExporter(MetricsExporter):
                 for sample in metric.get_all_samples():
                     if "type" in sample.labels:
                         if sample.labels["type"] == "count":
-                            labels = {k: v for k, v in sample.labels.items() if k != "type"}
+                            labels = {
+                                k: v for k, v in sample.labels.items() if k != "type"
+                            }
                             labels_str = self._format_labels(labels)
                             lines.append(f"{name}_count{labels_str} {sample.value}")
                         elif sample.labels["type"] == "sum":
-                            labels = {k: v for k, v in sample.labels.items() if k != "type"}
+                            labels = {
+                                k: v for k, v in sample.labels.items() if k != "type"
+                            }
                             labels_str = self._format_labels(labels)
                             lines.append(f"{name}_sum{labels_str} {sample.value}")
                     elif "le" in sample.labels:
@@ -568,10 +626,10 @@ class PrometheusExporter(MetricsExporter):
 
     def _format_labels(self, labels: Dict[str, str]) -> str:
         """Format labels for Prometheus format.
-        
+
         Args:
             labels: Labels dictionary.
-            
+
         Returns:
             Formatted labels string.
         """
@@ -594,7 +652,7 @@ _registry_lock = threading.RLock()
 
 def get_metrics_registry() -> MetricsRegistry:
     """Get the global metrics registry.
-    
+
     Returns:
         Global metrics registry instance.
     """
@@ -606,10 +664,14 @@ def get_metrics_registry() -> MetricsRegistry:
         return _global_registry
 
 
-def record_operation_metrics(operation: str, duration_ms: float, status: str = "success",
-                           context: Optional[RequestContext] = None) -> None:
+def record_operation_metrics(
+    operation: str,
+    duration_ms: float,
+    status: str = "success",
+    context: Optional[RequestContext] = None,
+) -> None:
     """Record metrics for an operation.
-    
+
     Args:
         operation: Operation name.
         duration_ms: Duration in milliseconds.
@@ -622,23 +684,17 @@ def record_operation_metrics(operation: str, duration_ms: float, status: str = "
     duration_histogram = registry.histogram(
         "operation_duration_seconds",
         "Duration of operations in seconds",
-        labels=["operation", "status"]
+        labels=["operation", "status"],
     )
-    duration_histogram.observe(duration_ms / 1000.0, {
-        "operation": operation,
-        "status": status
-    })
+    duration_histogram.observe(
+        duration_ms / 1000.0, {"operation": operation, "status": status}
+    )
 
     # Record operation count
     operation_counter = registry.counter(
-        "operation_total",
-        "Total number of operations",
-        labels=["operation", "status"]
+        "operation_total", "Total number of operations", labels=["operation", "status"]
     )
-    operation_counter.increment(labels={
-        "operation": operation,
-        "status": status
-    })
+    operation_counter.increment(labels={"operation": operation, "status": status})
 
     # Log metrics with context
     if context:
@@ -647,20 +703,21 @@ def record_operation_metrics(operation: str, duration_ms: float, status: str = "
             context=context,
             operation=operation,
             duration_ms=duration_ms,
-            status=status
+            status=status,
         )
 
 
 def with_metrics(operation: str, labels: Optional[Dict[str, str]] = None):
     """Decorator to automatically record metrics for a function.
-    
+
     Args:
         operation: Operation name for metrics.
         labels: Additional labels for metrics.
-        
+
     Returns:
         Decorator function.
     """
+
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -683,6 +740,7 @@ def with_metrics(operation: str, labels: Optional[Dict[str, str]] = None):
                 record_operation_metrics(operation, duration_ms, status)
 
         return wrapper
+
     return decorator
 
 
@@ -693,7 +751,7 @@ def get_request_duration_histogram() -> Histogram:
     return registry.histogram(
         "http_request_duration_seconds",
         "HTTP request duration in seconds",
-        labels=["method", "endpoint", "status"]
+        labels=["method", "endpoint", "status"],
     )
 
 
@@ -701,9 +759,7 @@ def get_error_counter() -> Counter:
     """Get or create error counter."""
     registry = get_metrics_registry()
     return registry.counter(
-        "errors_total",
-        "Total number of errors",
-        labels=["error_type", "module"]
+        "errors_total", "Total number of errors", labels=["error_type", "module"]
     )
 
 
@@ -711,7 +767,5 @@ def get_active_connections_gauge() -> Gauge:
     """Get or create active connections gauge."""
     registry = get_metrics_registry()
     return registry.gauge(
-        "active_connections",
-        "Number of active connections",
-        labels=["connection_type"]
+        "active_connections", "Number of active connections", labels=["connection_type"]
     )

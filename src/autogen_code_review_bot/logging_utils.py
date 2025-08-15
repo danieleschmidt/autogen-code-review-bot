@@ -13,9 +13,13 @@ from typing import Any, Dict, Optional, Union
 class RequestContext:
     """Context for tracking requests across the application."""
 
-    def __init__(self, request_id: Optional[str] = None, metadata: Optional[Dict[str, Any]] = None):
+    def __init__(
+        self,
+        request_id: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+    ):
         """Initialize request context.
-        
+
         Args:
             request_id: Unique identifier for the request. Auto-generated if not provided.
             metadata: Additional metadata to include with the request.
@@ -34,7 +38,7 @@ class StructuredLogger:
 
     def __init__(self, name: str):
         """Initialize structured logger.
-        
+
         Args:
             name: Logger name (typically module name).
         """
@@ -46,16 +50,16 @@ class StructuredLogger:
         level: str,
         message: str,
         context: Optional[RequestContext] = None,
-        **kwargs
+        **kwargs,
     ) -> str:
         """Format log entry as structured JSON.
-        
+
         Args:
             level: Log level (INFO, ERROR, etc.).
             message: Log message.
             context: Request context for correlation.
             **kwargs: Additional fields to include.
-            
+
         Returns:
             JSON-formatted log string.
         """
@@ -95,14 +99,22 @@ class StructuredLogger:
         formatted = self._format_structured_log("WARNING", message, context, **kwargs)
         self.logger.warning(formatted)
 
-    def error(self, message: str, context: Optional[RequestContext] = None, exc_info: bool = False, **kwargs):
+    def error(
+        self,
+        message: str,
+        context: Optional[RequestContext] = None,
+        exc_info: bool = False,
+        **kwargs,
+    ):
         """Log error message."""
         if exc_info:
             kwargs["exc_info"] = True
         formatted = self._format_structured_log("ERROR", message, context, **kwargs)
         self.logger.error(formatted, exc_info=exc_info)
 
-    def critical(self, message: str, context: Optional[RequestContext] = None, **kwargs):
+    def critical(
+        self, message: str, context: Optional[RequestContext] = None, **kwargs
+    ):
         """Log critical message."""
         formatted = self._format_structured_log("CRITICAL", message, context, **kwargs)
         self.logger.critical(formatted)
@@ -114,10 +126,10 @@ _loggers: Dict[str, StructuredLogger] = {}
 
 def get_request_logger(name: str) -> StructuredLogger:
     """Get or create a structured logger for the given name.
-    
+
     Args:
         name: Logger name (typically module name).
-        
+
     Returns:
         StructuredLogger instance.
     """
@@ -128,7 +140,7 @@ def get_request_logger(name: str) -> StructuredLogger:
 
 def configure_structured_logging(config: Optional[Dict[str, Any]] = None) -> None:
     """Configure structured logging for the application.
-    
+
     Args:
         config: Logging configuration dictionary.
     """
@@ -139,7 +151,7 @@ def configure_structured_logging(config: Optional[Dict[str, Any]] = None) -> Non
     logging.basicConfig(
         level=getattr(logging, level.upper()),
         format="%(message)s",  # We handle formatting in StructuredLogger
-        force=True
+        force=True,
     )
 
     # Configure root logger to use JSON format
@@ -157,10 +169,10 @@ def configure_structured_logging(config: Optional[Dict[str, Any]] = None) -> Non
 
 def sanitize_log_data(data: Any) -> Any:
     """Sanitize sensitive data from log entries.
-    
+
     Args:
         data: Data to sanitize (dict, list, or primitive).
-        
+
     Returns:
         Sanitized copy of the data.
     """
@@ -176,10 +188,10 @@ def sanitize_log_data(data: Any) -> Any:
 
 def _sanitize_string_value(value: str) -> str:
     """Sanitize sensitive strings.
-    
+
     Args:
         value: String value to check.
-        
+
     Returns:
         Original value or "***" if sensitive.
     """
@@ -189,7 +201,7 @@ def _sanitize_string_value(value: str) -> str:
         r"secret",
         r"password",
         r"auth",
-        r"credential"
+        r"credential",
     ]
 
     # Check if any sensitive pattern matches the value name (case insensitive)
@@ -202,10 +214,10 @@ def _sanitize_string_value(value: str) -> str:
 
 def _is_sensitive_key(key: str) -> bool:
     """Check if a key name indicates sensitive data.
-    
+
     Args:
         key: Dictionary key to check.
-        
+
     Returns:
         True if the key indicates sensitive data.
     """
@@ -215,7 +227,7 @@ def _is_sensitive_key(key: str) -> bool:
         r"secret",
         r"password",
         r"auth",
-        r"credential"
+        r"credential",
     ]
 
     key_lower = key.lower()
@@ -224,10 +236,10 @@ def _is_sensitive_key(key: str) -> bool:
 
 def sanitize_log_data(data: Any) -> Any:
     """Sanitize sensitive data from log entries.
-    
+
     Args:
         data: Data to sanitize (dict, list, or primitive).
-        
+
     Returns:
         Sanitized copy of the data.
     """
@@ -245,16 +257,19 @@ def sanitize_log_data(data: Any) -> Any:
         return data
 
 
-def timed_operation(context: Optional[RequestContext] = None, operation: str = "operation"):
+def timed_operation(
+    context: Optional[RequestContext] = None, operation: str = "operation"
+):
     """Decorator to log operation timing.
-    
+
     Args:
         context: Request context for correlation.
         operation: Operation name for logging.
-        
+
     Returns:
         Decorator function.
     """
+
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -265,7 +280,7 @@ def timed_operation(context: Optional[RequestContext] = None, operation: str = "
                 f"Starting {operation}",
                 context=context,
                 operation=operation,
-                function=func.__name__
+                function=func.__name__,
             )
 
             try:
@@ -278,7 +293,7 @@ def timed_operation(context: Optional[RequestContext] = None, operation: str = "
                     operation=operation,
                     function=func.__name__,
                     duration_ms=duration_ms,
-                    status="success"
+                    status="success",
                 )
 
                 return result
@@ -294,12 +309,13 @@ def timed_operation(context: Optional[RequestContext] = None, operation: str = "
                     duration_ms=duration_ms,
                     status="error",
                     error_type=type(e).__name__,
-                    exc_info=True
+                    exc_info=True,
                 )
 
                 raise
 
         return wrapper
+
     return decorator
 
 
@@ -308,7 +324,7 @@ class MetricsCollector:
 
     def __init__(self, context: Optional[RequestContext] = None):
         """Initialize metrics collector.
-        
+
         Args:
             context: Request context for correlation.
         """
@@ -318,7 +334,7 @@ class MetricsCollector:
 
     def increment(self, metric_name: str, value: int = 1) -> None:
         """Increment a counter metric.
-        
+
         Args:
             metric_name: Name of the metric.
             value: Value to increment by (default: 1).
@@ -330,7 +346,7 @@ class MetricsCollector:
 
     def set_gauge(self, metric_name: str, value: Union[int, float]) -> None:
         """Set a gauge metric value.
-        
+
         Args:
             metric_name: Name of the metric.
             value: Value to set.
@@ -339,7 +355,7 @@ class MetricsCollector:
 
     def record_timing(self, metric_name: str, duration_ms: float) -> None:
         """Record a timing metric.
-        
+
         Args:
             metric_name: Name of the metric.
             duration_ms: Duration in milliseconds.
@@ -348,7 +364,7 @@ class MetricsCollector:
 
     def get_metrics(self) -> Dict[str, Union[int, float]]:
         """Get current metrics.
-        
+
         Returns:
             Dictionary of current metrics.
         """
@@ -356,12 +372,8 @@ class MetricsCollector:
 
     def log_metrics(self, message: str = "Metrics report") -> None:
         """Log current metrics.
-        
+
         Args:
             message: Log message.
         """
-        self.logger.info(
-            message,
-            context=self.context,
-            metrics=self.metrics
-        )
+        self.logger.info(message, context=self.context, metrics=self.metrics)
