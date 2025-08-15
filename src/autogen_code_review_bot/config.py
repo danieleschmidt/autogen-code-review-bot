@@ -8,7 +8,7 @@ over default values.
 
 Supported environment variables:
 - AUTOGEN_GITHUB_API_URL: GitHub API base URL
-- AUTOGEN_DEFAULT_TIMEOUT: Default command timeout in seconds  
+- AUTOGEN_DEFAULT_TIMEOUT: Default command timeout in seconds
 - AUTOGEN_HTTP_TIMEOUT: HTTP request timeout in seconds
 - AUTOGEN_CONFIG_FILE: Path to configuration file
 """
@@ -23,6 +23,7 @@ from urllib.parse import urlparse
 
 class ConfigurationError(Exception):
     """Raised when configuration is invalid or cannot be loaded."""
+
     pass
 
 
@@ -38,14 +39,16 @@ class Config:
     http_timeout: int = 10
 
     # Linter Configuration
-    default_linters: Dict[str, str] = field(default_factory=lambda: {
-        "python": "ruff",
-        "javascript": "eslint",
-        "typescript": "eslint",
-        "ruby": "rubocop",
-        "go": "golangci-lint",
-        "rust": "clippy",
-    })
+    default_linters: Dict[str, str] = field(
+        default_factory=lambda: {
+            "python": "ruff",
+            "javascript": "eslint",
+            "typescript": "eslint",
+            "ruby": "rubocop",
+            "go": "golangci-lint",
+            "rust": "clippy",
+        }
+    )
 
     def __post_init__(self):
         """Validate configuration after initialization."""
@@ -54,10 +57,10 @@ class Config:
 
 def validate_config(config: Config) -> None:
     """Validate configuration values.
-    
+
     Args:
         config: Configuration to validate.
-        
+
     Raises:
         ConfigurationError: If configuration is invalid.
     """
@@ -69,28 +72,38 @@ def validate_config(config: Config) -> None:
     if not parsed_url.scheme or not parsed_url.netloc:
         raise ConfigurationError(f"Invalid GitHub API URL: {config.github_api_url}")
 
-    if parsed_url.scheme not in ('http', 'https'):
-        raise ConfigurationError(f"GitHub API URL must use HTTP or HTTPS: {config.github_api_url}")
+    if parsed_url.scheme not in ("http", "https"):
+        raise ConfigurationError(
+            f"GitHub API URL must use HTTP or HTTPS: {config.github_api_url}"
+        )
 
     # Validate timeouts
     if not isinstance(config.default_timeout, int) or config.default_timeout <= 0:
-        raise ConfigurationError(f"Timeout must be positive integer, got: {config.default_timeout}")
+        raise ConfigurationError(
+            f"Timeout must be positive integer, got: {config.default_timeout}"
+        )
 
     if not isinstance(config.http_timeout, int) or config.http_timeout <= 0:
-        raise ConfigurationError(f"HTTP timeout must be positive integer, got: {config.http_timeout}")
+        raise ConfigurationError(
+            f"HTTP timeout must be positive integer, got: {config.http_timeout}"
+        )
 
     # Validate linters configuration
     if not isinstance(config.default_linters, dict):
-        raise ConfigurationError(f"default_linters must be a dictionary, got: {type(config.default_linters)}")
+        raise ConfigurationError(
+            f"default_linters must be a dictionary, got: {type(config.default_linters)}"
+        )
 
     for language, linter in config.default_linters.items():
         if not isinstance(language, str) or not isinstance(linter, str):
-            raise ConfigurationError(f"Linter mapping must be str->str, got {language}: {linter}")
+            raise ConfigurationError(
+                f"Linter mapping must be str->str, got {language}: {linter}"
+            )
 
 
 def get_default_config() -> Config:
     """Get default configuration.
-    
+
     Returns:
         Default configuration instance.
     """
@@ -99,13 +112,13 @@ def get_default_config() -> Config:
 
 def load_config_from_file(file_path: Union[str, Path]) -> Dict[str, Any]:
     """Load configuration from file.
-    
+
     Args:
         file_path: Path to configuration file.
-        
+
     Returns:
         Dictionary of configuration values.
-        
+
     Raises:
         ConfigurationError: If file cannot be loaded or parsed.
     """
@@ -115,11 +128,13 @@ def load_config_from_file(file_path: Union[str, Path]) -> Dict[str, Any]:
         return {}
 
     try:
-        with open(file_path, encoding='utf-8') as f:
-            if file_path.suffix.lower() == '.json':
+        with open(file_path, encoding="utf-8") as f:
+            if file_path.suffix.lower() == ".json":
                 return json.load(f)
             else:
-                raise ConfigurationError(f"Unsupported config file format: {file_path.suffix}")
+                raise ConfigurationError(
+                    f"Unsupported config file format: {file_path.suffix}"
+                )
     except json.JSONDecodeError as e:
         raise ConfigurationError(f"Failed to parse config file {file_path}: {e}")
     except Exception as e:
@@ -128,33 +143,39 @@ def load_config_from_file(file_path: Union[str, Path]) -> Dict[str, Any]:
 
 def load_config_from_environment() -> Dict[str, Any]:
     """Load configuration from environment variables.
-    
+
     Returns:
         Dictionary of configuration values from environment.
     """
     config = {}
 
     # GitHub API URL
-    if 'AUTOGEN_GITHUB_API_URL' in os.environ:
-        config['github_api_url'] = os.environ['AUTOGEN_GITHUB_API_URL']
+    if "AUTOGEN_GITHUB_API_URL" in os.environ:
+        config["github_api_url"] = os.environ["AUTOGEN_GITHUB_API_URL"]
 
     # Timeout settings
-    if 'AUTOGEN_DEFAULT_TIMEOUT' in os.environ:
+    if "AUTOGEN_DEFAULT_TIMEOUT" in os.environ:
         try:
-            config['default_timeout'] = int(os.environ['AUTOGEN_DEFAULT_TIMEOUT'])
+            config["default_timeout"] = int(os.environ["AUTOGEN_DEFAULT_TIMEOUT"])
         except ValueError:
-            raise ConfigurationError(f"Invalid AUTOGEN_DEFAULT_TIMEOUT: {os.environ['AUTOGEN_DEFAULT_TIMEOUT']}")
+            raise ConfigurationError(
+                f"Invalid AUTOGEN_DEFAULT_TIMEOUT: {os.environ['AUTOGEN_DEFAULT_TIMEOUT']}"
+            )
 
-    if 'AUTOGEN_HTTP_TIMEOUT' in os.environ:
+    if "AUTOGEN_HTTP_TIMEOUT" in os.environ:
         try:
-            config['http_timeout'] = int(os.environ['AUTOGEN_HTTP_TIMEOUT'])
+            config["http_timeout"] = int(os.environ["AUTOGEN_HTTP_TIMEOUT"])
         except ValueError:
-            raise ConfigurationError(f"Invalid AUTOGEN_HTTP_TIMEOUT: {os.environ['AUTOGEN_HTTP_TIMEOUT']}")
+            raise ConfigurationError(
+                f"Invalid AUTOGEN_HTTP_TIMEOUT: {os.environ['AUTOGEN_HTTP_TIMEOUT']}"
+            )
 
     # Linter configuration via environment (JSON format)
-    if 'AUTOGEN_DEFAULT_LINTERS' in os.environ:
+    if "AUTOGEN_DEFAULT_LINTERS" in os.environ:
         try:
-            config['default_linters'] = json.loads(os.environ['AUTOGEN_DEFAULT_LINTERS'])
+            config["default_linters"] = json.loads(
+                os.environ["AUTOGEN_DEFAULT_LINTERS"]
+            )
         except json.JSONDecodeError as e:
             raise ConfigurationError(f"Invalid AUTOGEN_DEFAULT_LINTERS JSON: {e}")
 
@@ -163,13 +184,13 @@ def load_config_from_environment() -> Dict[str, Any]:
 
 def merge_config_sources(*sources: Dict[str, Any]) -> Dict[str, Any]:
     """Merge configuration from multiple sources.
-    
+
     Later sources take precedence over earlier ones.
     Nested dictionaries are merged recursively.
-    
+
     Args:
         *sources: Configuration dictionaries to merge.
-        
+
     Returns:
         Merged configuration dictionary.
     """
@@ -177,9 +198,11 @@ def merge_config_sources(*sources: Dict[str, Any]) -> Dict[str, Any]:
 
     for source in sources:
         for key, value in source.items():
-            if (key in merged and
-                isinstance(merged[key], dict) and
-                isinstance(value, dict)):
+            if (
+                key in merged
+                and isinstance(merged[key], dict)
+                and isinstance(value, dict)
+            ):
                 # Recursively merge dictionaries
                 merged[key] = merge_config_sources(merged[key], value)
             else:
@@ -195,18 +218,18 @@ _config_cache: Optional[Config] = None
 
 def load_config(config_file: Optional[Union[str, Path]] = None) -> Config:
     """Load configuration from all sources.
-    
+
     Configuration is loaded in this precedence order:
     1. Default values
     2. Configuration file (if provided or via AUTOGEN_CONFIG_FILE)
     3. Environment variables (highest precedence)
-    
+
     Args:
         config_file: Optional path to configuration file.
-        
+
     Returns:
         Loaded and validated configuration.
-        
+
     Raises:
         ConfigurationError: If configuration is invalid.
     """
@@ -218,15 +241,15 @@ def load_config(config_file: Optional[Union[str, Path]] = None) -> Config:
 
     # Determine config file to use
     if config_file is None:
-        config_file = os.environ.get('AUTOGEN_CONFIG_FILE')
+        config_file = os.environ.get("AUTOGEN_CONFIG_FILE")
 
     # Load from all sources
     default_config = get_default_config()
     default_dict = {
-        'github_api_url': default_config.github_api_url,
-        'default_timeout': default_config.default_timeout,
-        'http_timeout': default_config.http_timeout,
-        'default_linters': default_config.default_linters,
+        "github_api_url": default_config.github_api_url,
+        "default_timeout": default_config.default_timeout,
+        "http_timeout": default_config.http_timeout,
+        "default_linters": default_config.default_linters,
     }
 
     file_config = load_config_from_file(config_file) if config_file else {}
@@ -246,7 +269,7 @@ def load_config(config_file: Optional[Union[str, Path]] = None) -> Config:
 
 def clear_config_cache() -> None:
     """Clear the configuration cache.
-    
+
     This is useful for testing or when configuration needs to be reloaded.
     """
     global _config_cache
@@ -276,10 +299,10 @@ def get_default_linters() -> Dict[str, str]:
 
 def get_linter_for_language(language: str) -> Optional[str]:
     """Get configured linter for a specific language.
-    
+
     Args:
         language: Programming language name.
-        
+
     Returns:
         Linter command name or None if not configured.
     """

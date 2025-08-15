@@ -30,6 +30,7 @@ metrics = get_metrics_registry()
 @dataclass
 class CacheEntry:
     """Represents a cache entry with metadata."""
+
     key: str
     value: Any
     created_at: datetime
@@ -57,6 +58,7 @@ class CacheEntry:
 @dataclass
 class CacheStats:
     """Cache performance statistics."""
+
     hits: int = 0
     misses: int = 0
     evictions: int = 0
@@ -108,8 +110,14 @@ class AdaptiveLRU:
 
             return entry.value
 
-    def put(self, key: str, value: Any, ttl_seconds: Optional[int] = None,
-            tags: Set[str] = None, compress: bool = False) -> bool:
+    def put(
+        self,
+        key: str,
+        value: Any,
+        ttl_seconds: Optional[int] = None,
+        tags: Set[str] = None,
+        compress: bool = False,
+    ) -> bool:
         """Put item in cache."""
         with self._lock:
             # Calculate size
@@ -139,12 +147,14 @@ class AdaptiveLRU:
                 ttl_seconds=ttl_seconds,
                 size_bytes=size_bytes,
                 tags=tags or set(),
-                compression=is_compressed
+                compression=is_compressed,
             )
 
             # Check if we need to evict
-            while (len(self._cache) >= self.max_size or
-                   self._stats.size_bytes + size_bytes > self.max_memory_bytes):
+            while (
+                len(self._cache) >= self.max_size
+                or self._stats.size_bytes + size_bytes > self.max_memory_bytes
+            ):
                 if not self._evict_entry():
                     # Can't evict any more entries
                     return False
@@ -217,17 +227,22 @@ class AdaptiveLRU:
                     ttl_score = entry.ttl_seconds / remaining_ttl
 
             # Combined score (lower is more likely to be evicted)
-            scores[key] = frequency_score * recency_score - size_score * 0.1 - ttl_score * 0.1
+            scores[key] = (
+                frequency_score * recency_score - size_score * 0.1 - ttl_score * 0.1
+            )
 
         # Find entry with lowest score
         victim_key = min(scores, key=scores.get)
         victim_entry = self._cache[victim_key]
 
-        self.logger.debug(f"Evicting cache entry: {victim_key}", extra={
-            'size_bytes': victim_entry.size_bytes,
-            'access_count': victim_entry.access_count,
-            'age_seconds': (current_time - victim_entry.created_at).total_seconds()
-        })
+        self.logger.debug(
+            f"Evicting cache entry: {victim_key}",
+            extra={
+                "size_bytes": victim_entry.size_bytes,
+                "access_count": victim_entry.access_count,
+                "age_seconds": (current_time - victim_entry.created_at).total_seconds(),
+            },
+        )
 
         # Remove entry
         self._stats.size_bytes -= victim_entry.size_bytes
@@ -260,7 +275,9 @@ class AdaptiveLRU:
         if access_count > 0:
             # Calculate frequency based on accesses in last hour vs last 24 hours
             hour_ago = current_time - timedelta(hours=1)
-            recent_accesses = len([t for t in self._access_patterns[key] if t > hour_ago])
+            recent_accesses = len(
+                [t for t in self._access_patterns[key] if t > hour_ago]
+            )
 
             self._frequency_scores[key] = recent_accesses * 10 + access_count
 
@@ -274,8 +291,10 @@ class AdaptiveLRU:
             elif isinstance(value, (list, tuple)):
                 return sum(self._estimate_size(item) for item in value)
             elif isinstance(value, dict):
-                return sum(self._estimate_size(k) + self._estimate_size(v)
-                          for k, v in value.items())
+                return sum(
+                    self._estimate_size(k) + self._estimate_size(v)
+                    for k, v in value.items()
+                )
             else:
                 # Fallback: serialize to estimate size
                 return len(pickle.dumps(value))
@@ -296,24 +315,29 @@ class AdaptiveLRU:
                 return None
 
             return {
-                'key': key,
-                'size_bytes': entry.size_bytes,
-                'created_at': entry.created_at.isoformat(),
-                'last_accessed': entry.last_accessed.isoformat(),
-                'access_count': entry.access_count,
-                'ttl_seconds': entry.ttl_seconds,
-                'is_expired': entry.is_expired(),
-                'tags': list(entry.tags),
-                'compressed': entry.compression,
-                'frequency_score': self._frequency_scores.get(key, 0.0)
+                "key": key,
+                "size_bytes": entry.size_bytes,
+                "created_at": entry.created_at.isoformat(),
+                "last_accessed": entry.last_accessed.isoformat(),
+                "access_count": entry.access_count,
+                "ttl_seconds": entry.ttl_seconds,
+                "is_expired": entry.is_expired(),
+                "tags": list(entry.tags),
+                "compressed": entry.compression,
+                "frequency_score": self._frequency_scores.get(key, 0.0),
             }
 
 
 class DistributedCache:
     """Distributed cache with Redis backend and local L1 cache."""
 
-    def __init__(self, redis: Redis, local_cache_size: int = 5000,
-                 default_ttl: int = 3600, namespace: str = "autogen"):
+    def __init__(
+        self,
+        redis: Redis,
+        local_cache_size: int = 5000,
+        default_ttl: int = 3600,
+        namespace: str = "autogen",
+    ):
         self.redis = redis
         self.namespace = namespace
         self.default_ttl = default_ttl
@@ -358,8 +382,14 @@ class DistributedCache:
         metrics.record_counter("cache_misses_total", 1, tags={"key": key[:50]})
         return None
 
-    async def put(self, key: str, value: Any, ttl_seconds: Optional[int] = None,
-                 tags: Set[str] = None, use_local: bool = True) -> bool:
+    async def put(
+        self,
+        key: str,
+        value: Any,
+        ttl_seconds: Optional[int] = None,
+        tags: Set[str] = None,
+        use_local: bool = True,
+    ) -> bool:
         """Put item in cache (both L1 and L2)."""
         redis_key = self._make_key(key)
         ttl = ttl_seconds or self.default_ttl
@@ -426,11 +456,14 @@ class DistributedCache:
             # Also clear from local cache by tags
             local_cleared = self.local_cache.clear_by_tags(tags)
 
-            self.logger.info("Cache invalidation completed", extra={
-                'tags': list(tags),
-                'redis_keys_invalidated': total_invalidated,
-                'local_keys_invalidated': local_cleared
-            })
+            self.logger.info(
+                "Cache invalidation completed",
+                extra={
+                    "tags": list(tags),
+                    "redis_keys_invalidated": total_invalidated,
+                    "local_keys_invalidated": local_cleared,
+                },
+            )
 
             return total_invalidated
 
@@ -449,23 +482,23 @@ class DistributedCache:
             local_stats = self.local_cache.get_stats()
 
             return {
-                'redis': {
-                    'used_memory_mb': redis_info.get('used_memory', 0) / 1024 / 1024,
-                    'keyspace': redis_keyspace
+                "redis": {
+                    "used_memory_mb": redis_info.get("used_memory", 0) / 1024 / 1024,
+                    "keyspace": redis_keyspace,
                 },
-                'local': {
-                    'hit_rate': local_stats.hit_rate,
-                    'entry_count': local_stats.entry_count,
-                    'size_mb': local_stats.size_bytes / 1024 / 1024,
-                    'hits': local_stats.hits,
-                    'misses': local_stats.misses,
-                    'evictions': local_stats.evictions
-                }
+                "local": {
+                    "hit_rate": local_stats.hit_rate,
+                    "entry_count": local_stats.entry_count,
+                    "size_mb": local_stats.size_bytes / 1024 / 1024,
+                    "hits": local_stats.hits,
+                    "misses": local_stats.misses,
+                    "evictions": local_stats.evictions,
+                },
             }
 
         except Exception as e:
             self.logger.error(f"Error getting cache info: {e}")
-            return {'error': str(e)}
+            return {"error": str(e)}
 
 
 class PredictiveCache:
@@ -489,12 +522,11 @@ class PredictiveCache:
 
         # Keep only recent accesses (last 7 days)
         cutoff = datetime.now(timezone.utc) - timedelta(days=7)
-        self.access_log = [
-            (k, t, c) for k, t, c in self.access_log if t > cutoff
-        ]
+        self.access_log = [(k, t, c) for k, t, c in self.access_log if t > cutoff]
 
-    async def get_with_prediction(self, key: str, loader_func: Callable = None,
-                                context: str = "") -> Optional[Any]:
+    async def get_with_prediction(
+        self, key: str, loader_func: Callable = None, context: str = ""
+    ) -> Optional[Any]:
         """Get item from cache with predictive pre-loading."""
         # Log the access
         self.log_access(key, context)
@@ -581,14 +613,18 @@ class PredictiveCache:
                 context_counts[context] += 1
 
         return {
-            'total_accesses': len(self.access_log),
-            'unique_keys': len(key_counts),
-            'most_accessed_keys': sorted(key_counts.items(), key=lambda x: x[1], reverse=True)[:10],
-            'contexts': sorted(context_counts.items(), key=lambda x: x[1], reverse=True)[:5],
-            'time_range': {
-                'start': min(t for _, t, _ in self.access_log).isoformat(),
-                'end': max(t for _, t, _ in self.access_log).isoformat()
-            }
+            "total_accesses": len(self.access_log),
+            "unique_keys": len(key_counts),
+            "most_accessed_keys": sorted(
+                key_counts.items(), key=lambda x: x[1], reverse=True
+            )[:10],
+            "contexts": sorted(
+                context_counts.items(), key=lambda x: x[1], reverse=True
+            )[:5],
+            "time_range": {
+                "start": min(t for _, t, _ in self.access_log).isoformat(),
+                "end": max(t for _, t, _ in self.access_log).isoformat(),
+            },
         }
 
 
@@ -604,16 +640,17 @@ class CacheWarmer:
         self._warming_task: Optional[asyncio.Task] = None
         self._running = False
 
-    def register_warming_strategy(self, name: str, loader_func: Callable,
-                                schedule: Dict[str, Any]):
+    def register_warming_strategy(
+        self, name: str, loader_func: Callable, schedule: Dict[str, Any]
+    ):
         """Register a cache warming strategy."""
         self.warming_strategies[name] = loader_func
         self.warming_schedule[name] = {
-            'interval_seconds': schedule.get('interval_seconds', 3600),
-            'keys': schedule.get('keys', []),
-            'tags': schedule.get('tags', set()),
-            'ttl_seconds': schedule.get('ttl_seconds', 3600),
-            'last_run': None
+            "interval_seconds": schedule.get("interval_seconds", 3600),
+            "keys": schedule.get("keys", []),
+            "tags": schedule.get("tags", set()),
+            "ttl_seconds": schedule.get("ttl_seconds", 3600),
+            "last_run": None,
         }
 
         self.logger.info(f"Registered cache warming strategy: {name}")
@@ -646,14 +683,16 @@ class CacheWarmer:
 
                 # Check each warming strategy
                 for name, schedule in self.warming_schedule.items():
-                    last_run = schedule.get('last_run')
-                    interval = schedule['interval_seconds']
+                    last_run = schedule.get("last_run")
+                    interval = schedule["interval_seconds"]
 
-                    if (last_run is None or
-                        (current_time - last_run).total_seconds() >= interval):
+                    if (
+                        last_run is None
+                        or (current_time - last_run).total_seconds() >= interval
+                    ):
 
                         await self._execute_warming_strategy(name)
-                        schedule['last_run'] = current_time
+                        schedule["last_run"] = current_time
 
                 await asyncio.sleep(60)  # Check every minute
 
@@ -678,19 +717,22 @@ class CacheWarmer:
             # Cache the data
             for key, value in data.items():
                 await self.cache.put(
-                    key, value,
-                    ttl_seconds=schedule['ttl_seconds'],
-                    tags=schedule['tags']
+                    key,
+                    value,
+                    ttl_seconds=schedule["ttl_seconds"],
+                    tags=schedule["tags"],
                 )
 
-            self.logger.info(f"Cache warming completed for {strategy_name}", extra={
-                'keys_warmed': len(data)
-            })
+            self.logger.info(
+                f"Cache warming completed for {strategy_name}",
+                extra={"keys_warmed": len(data)},
+            )
 
-            metrics.record_counter("cache_warming_executions_total", 1, tags={
-                "strategy": strategy_name,
-                "keys_count": len(data)
-            })
+            metrics.record_counter(
+                "cache_warming_executions_total",
+                1,
+                tags={"strategy": strategy_name, "keys_count": len(data)},
+            )
 
         except Exception as e:
             self.logger.error(f"Cache warming failed for {strategy_name}: {e}")
@@ -731,6 +773,7 @@ def get_cache_warmer(redis: Redis) -> CacheWarmer:
 # Convenience decorators
 def cached(key_func: Callable = None, ttl_seconds: int = 3600, tags: Set[str] = None):
     """Decorator for caching function results."""
+
     def decorator(func: Callable):
         async def async_wrapper(*args, **kwargs):
             # Generate cache key

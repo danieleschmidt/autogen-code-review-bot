@@ -30,9 +30,9 @@ class CoverageConfig:
     minimum_coverage: float = 85.0
     source_dirs: List[str] = field(default_factory=lambda: ["src"])
     test_dirs: List[str] = field(default_factory=lambda: ["tests"])
-    exclude_patterns: List[str] = field(default_factory=lambda: [
-        "*/test_*", "*/tests/*", "*/__pycache__/*"
-    ])
+    exclude_patterns: List[str] = field(
+        default_factory=lambda: ["*/test_*", "*/tests/*", "*/__pycache__/*"]
+    )
     fail_under: float = 85.0
 
     def __post_init__(self):
@@ -45,19 +45,21 @@ class CoverageConfig:
             raise ValueError("Source directories cannot be empty")
 
     @classmethod
-    def from_file(cls, config_path: str) -> 'CoverageConfig':
+    def from_file(cls, config_path: str) -> "CoverageConfig":
         """Load configuration from YAML file.
-        
+
         Args:
             config_path: Path to YAML configuration file
-            
+
         Returns:
             CoverageConfig instance
         """
         try:
             if not Path(config_path).exists():
-                logger.warning("Coverage config file not found, using defaults",
-                              extra={"config_path": config_path})
+                logger.warning(
+                    "Coverage config file not found, using defaults",
+                    extra={"config_path": config_path},
+                )
                 return cls()
 
             from .config_validation import (
@@ -77,20 +79,28 @@ class CoverageConfig:
                 # Extract coverage-specific configuration
                 coverage_config = config_data.get("coverage", {})
 
-                logger.info("Loaded and validated coverage configuration from file",
-                           extra={"config_path": config_path, "config": coverage_config})
+                logger.info(
+                    "Loaded and validated coverage configuration from file",
+                    extra={"config_path": config_path, "config": coverage_config},
+                )
 
                 return cls(**coverage_config)
 
             except (ConfigError, ValidationError) as e:
-                logger.error(f"Coverage configuration validation failed: {e}",
-                           extra={"config_path": config_path})
-                logger.warning("Using default coverage configuration due to validation errors")
+                logger.error(
+                    f"Coverage configuration validation failed: {e}",
+                    extra={"config_path": config_path},
+                )
+                logger.warning(
+                    "Using default coverage configuration due to validation errors"
+                )
                 return cls()
 
         except (yaml.YAMLError, TypeError, ValueError) as e:
-            logger.error("Failed to load coverage config, using defaults",
-                        extra={"config_path": config_path, "error": str(e)})
+            logger.error(
+                "Failed to load coverage config, using defaults",
+                extra={"config_path": config_path, "error": str(e)},
+            )
             return cls()
 
 
@@ -123,7 +133,7 @@ class CoverageResult:
             "lines_total": self.lines_total,
             "branches_covered": self.branches_covered,
             "branches_total": self.branches_total,
-            "timestamp": self.timestamp
+            "timestamp": self.timestamp,
         }
 
     def to_ci_format(self) -> str:
@@ -141,12 +151,12 @@ class CoverageResult:
         """Generate JUnit XML format for CI integration."""
         status = "PASS" if self.meets_threshold(85.0) else "FAIL"
 
-        xml = f'''<?xml version="1.0" encoding="UTF-8"?>
+        xml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <testsuite name="coverage" tests="1" failures="{0 if status == 'PASS' else 1}" time="0">
     <testcase name="coverage_threshold" classname="coverage">
         {'<failure message="Coverage below threshold">Coverage: ' + str(self.total_coverage) + '%</failure>' if status == 'FAIL' else ''}
     </testcase>
-</testsuite>'''
+</testsuite>"""
         return xml
 
 
@@ -155,7 +165,7 @@ class CoverageReporter:
 
     def __init__(self, config: CoverageConfig):
         """Initialize coverage reporter.
-        
+
         Args:
             config: Coverage configuration
         """
@@ -165,18 +175,20 @@ class CoverageReporter:
 
     def run_coverage(self, repo_path: str) -> CoverageResult:
         """Run coverage analysis on the repository.
-        
+
         Args:
             repo_path: Path to the repository
-            
+
         Returns:
             CoverageResult with analysis results
-            
+
         Raises:
             CoverageError: If coverage analysis fails
         """
-        logger.info("Starting coverage analysis",
-                   extra={"repo_path": repo_path, "config": self.config.to_dict()})
+        logger.info(
+            "Starting coverage analysis",
+            extra={"repo_path": repo_path, "config": self.config.to_dict()},
+        )
 
         repo_path = Path(repo_path)
         if not repo_path.exists():
@@ -186,8 +198,10 @@ class CoverageReporter:
         test_files = discover_test_files([str(repo_path / td) for td in self.test_dirs])
 
         if not test_files:
-            logger.warning("No test files found",
-                          extra={"test_dirs": self.test_dirs, "repo_path": str(repo_path)})
+            logger.warning(
+                "No test files found",
+                extra={"test_dirs": self.test_dirs, "repo_path": str(repo_path)},
+            )
             return CoverageResult(files_analyzed=0)
 
         logger.info("Discovered test files", extra={"test_count": len(test_files)})
@@ -196,12 +210,16 @@ class CoverageReporter:
         try:
             result = self._run_pytest_coverage(repo_path, test_files)
 
-            logger.info("Coverage analysis completed",
-                       extra={
-                           "total_coverage": result.total_coverage,
-                           "files_analyzed": result.files_analyzed,
-                           "meets_threshold": result.meets_threshold(self.config.minimum_coverage)
-                       })
+            logger.info(
+                "Coverage analysis completed",
+                extra={
+                    "total_coverage": result.total_coverage,
+                    "files_analyzed": result.files_analyzed,
+                    "meets_threshold": result.meets_threshold(
+                        self.config.minimum_coverage
+                    ),
+                },
+            )
 
             return result
 
@@ -209,24 +227,28 @@ class CoverageReporter:
             logger.error("Coverage analysis failed", extra={"error": str(e)})
             raise CoverageError(f"Coverage analysis failed: {e}", {"exception": str(e)})
 
-    def _run_pytest_coverage(self, repo_path: Path, test_files: List[str]) -> CoverageResult:
+    def _run_pytest_coverage(
+        self, repo_path: Path, test_files: List[str]
+    ) -> CoverageResult:
         """Run pytest with coverage collection.
-        
+
         Args:
             repo_path: Path to repository
             test_files: List of test files to run
-            
+
         Returns:
             CoverageResult with parsed results
         """
         # Build coverage command
         cmd = [
-            "python", "-m", "pytest",
+            "python",
+            "-m",
+            "pytest",
             "--cov=" + ",".join(self.source_dirs),
             "--cov-report=json",
             "--cov-report=term-missing",
             "--cov-fail-under=" + str(self.config.fail_under),
-            "-v"
+            "-v",
         ] + test_files
 
         logger.debug("Running coverage command", extra={"command": " ".join(cmd)})
@@ -238,13 +260,15 @@ class CoverageReporter:
                 cwd=repo_path,
                 capture_output=True,
                 text=True,
-                timeout=get_system_config().coverage_timeout
+                timeout=get_system_config().coverage_timeout,
             )
 
             if result.returncode != 0:
                 # Coverage failure might be due to threshold not met
-                logger.warning("Coverage command returned non-zero",
-                              extra={"exit_code": result.returncode, "stderr": result.stderr})
+                logger.warning(
+                    "Coverage command returned non-zero",
+                    extra={"exit_code": result.returncode, "stderr": result.stderr},
+                )
 
             # Try to parse JSON output even if exit code is non-zero
             return self._parse_coverage_output(result.stdout, result.stderr)
@@ -256,11 +280,11 @@ class CoverageReporter:
 
     def _parse_coverage_output(self, stdout: str, stderr: str) -> CoverageResult:
         """Parse coverage output and extract metrics.
-        
+
         Args:
             stdout: Standard output from coverage command
             stderr: Standard error from coverage command
-            
+
         Returns:
             CoverageResult with parsed metrics
         """
@@ -268,11 +292,7 @@ class CoverageReporter:
         json_data = None
 
         # Try to find .coverage.json file (pytest-cov default)
-        coverage_files = [
-            "coverage.json",
-            ".coverage.json",
-            "htmlcov/coverage.json"
-        ]
+        coverage_files = ["coverage.json", ".coverage.json", "htmlcov/coverage.json"]
 
         for coverage_file in coverage_files:
             if Path(coverage_file).exists():
@@ -291,10 +311,10 @@ class CoverageReporter:
 
     def _parse_coverage_json(self, json_output: str) -> CoverageResult:
         """Parse JSON coverage output.
-        
+
         Args:
             json_output: JSON string with coverage data
-            
+
         Returns:
             CoverageResult with parsed data
         """
@@ -311,7 +331,7 @@ class CoverageReporter:
                 lines_covered=totals.get("covered_lines", 0),
                 lines_total=totals.get("num_statements", 0),
                 branches_covered=totals.get("covered_branches", 0),
-                branches_total=totals.get("num_branches", 0)
+                branches_total=totals.get("num_branches", 0),
             )
 
         except (json.JSONDecodeError, KeyError) as e:
@@ -320,10 +340,10 @@ class CoverageReporter:
 
     def _parse_coverage_text(self, text_output: str) -> CoverageResult:
         """Parse text coverage output as fallback.
-        
+
         Args:
             text_output: Text output from coverage command
-            
+
         Returns:
             CoverageResult with parsed data
         """
@@ -334,18 +354,20 @@ class CoverageReporter:
         patterns = [
             r"TOTAL\s+\d+\s+\d+\s+(\d+)%",  # pytest-cov format
             r"Total coverage:\s+(\d+\.?\d*)%",  # Alternative format
-            r"Coverage:\s+(\d+\.?\d*)%"  # Generic format
+            r"Coverage:\s+(\d+\.?\d*)%",  # Generic format
         ]
 
         for pattern in patterns:
             match = re.search(pattern, text_output)
             if match:
                 coverage = float(match.group(1))
-                logger.info("Parsed coverage from text output", extra={"coverage": coverage})
+                logger.info(
+                    "Parsed coverage from text output", extra={"coverage": coverage}
+                )
                 return CoverageResult(
                     total_coverage=coverage,
                     line_coverage=coverage,
-                    files_analyzed=1  # Rough estimate
+                    files_analyzed=1,  # Rough estimate
                 )
 
         # If no patterns match, try to find any percentage
@@ -353,22 +375,22 @@ class CoverageReporter:
         if percentage_match:
             coverage = float(percentage_match.group(1))
             return CoverageResult(
-                total_coverage=coverage,
-                line_coverage=coverage,
-                files_analyzed=1
+                total_coverage=coverage, line_coverage=coverage, files_analyzed=1
             )
 
-        logger.warning("Could not parse coverage from output",
-                      extra={"output_sample": text_output[:200]})
+        logger.warning(
+            "Could not parse coverage from output",
+            extra={"output_sample": text_output[:200]},
+        )
         return CoverageResult()
 
     def generate_html_report(self, result: CoverageResult, output_dir: str) -> str:
         """Generate HTML coverage report.
-        
+
         Args:
             result: Coverage analysis result
             output_dir: Directory to write HTML report
-            
+
         Returns:
             Path to generated HTML report
         """
@@ -420,19 +442,21 @@ class CoverageReporter:
 </html>
         """
 
-        with open(output_path, 'w') as f:
+        with open(output_path, "w") as f:
             f.write(html_content)
 
-        logger.info("Generated HTML coverage report", extra={"report_path": str(output_path)})
+        logger.info(
+            "Generated HTML coverage report", extra={"report_path": str(output_path)}
+        )
         return str(output_path)
 
 
 def discover_test_files(test_dirs: List[str]) -> List[str]:
     """Discover test files in specified directories.
-    
+
     Args:
         test_dirs: List of directories to search for tests
-        
+
     Returns:
         List of test file paths
     """
@@ -449,18 +473,22 @@ def discover_test_files(test_dirs: List[str]) -> List[str]:
             if test_file.is_file():
                 test_files.append(str(test_file))
 
-    logger.debug("Test file discovery completed",
-                extra={"directories": test_dirs, "files_found": len(test_files)})
+    logger.debug(
+        "Test file discovery completed",
+        extra={"directories": test_dirs, "files_found": len(test_files)},
+    )
     return test_files
 
 
-def validate_coverage_threshold(result: CoverageResult, threshold: float) -> Tuple[bool, str]:
+def validate_coverage_threshold(
+    result: CoverageResult, threshold: float
+) -> Tuple[bool, str]:
     """Validate coverage against threshold.
-    
+
     Args:
         result: Coverage analysis result
         threshold: Minimum coverage threshold
-        
+
     Returns:
         Tuple of (is_valid, message)
     """
@@ -468,23 +496,29 @@ def validate_coverage_threshold(result: CoverageResult, threshold: float) -> Tup
 
     if is_valid:
         message = f"Coverage of {result.total_coverage:.1f}% meets threshold of {threshold:.1f}%"
-        logger.info("Coverage validation passed",
-                   extra={"coverage": result.total_coverage, "threshold": threshold})
+        logger.info(
+            "Coverage validation passed",
+            extra={"coverage": result.total_coverage, "threshold": threshold},
+        )
     else:
         message = f"Coverage of {result.total_coverage:.1f}% below threshold of {threshold:.1f}%"
-        logger.warning("Coverage validation failed",
-                      extra={"coverage": result.total_coverage, "threshold": threshold})
+        logger.warning(
+            "Coverage validation failed",
+            extra={"coverage": result.total_coverage, "threshold": threshold},
+        )
 
     return is_valid, message
 
 
-def run_coverage_analysis(repo_path: str, config: CoverageConfig = None) -> CoverageResult:
+def run_coverage_analysis(
+    repo_path: str, config: CoverageConfig = None
+) -> CoverageResult:
     """Run complete coverage analysis.
-    
+
     Args:
         repo_path: Path to repository
         config: Coverage configuration (uses default if not provided)
-        
+
     Returns:
         CoverageResult with analysis results
     """
@@ -495,15 +529,16 @@ def run_coverage_analysis(repo_path: str, config: CoverageConfig = None) -> Cove
     return reporter.run_coverage(repo_path)
 
 
-def generate_coverage_report(repo_path: str, config: CoverageConfig = None,
-                           html_output_dir: str = None) -> Tuple[CoverageResult, Optional[str]]:
+def generate_coverage_report(
+    repo_path: str, config: CoverageConfig = None, html_output_dir: str = None
+) -> Tuple[CoverageResult, Optional[str]]:
     """Generate complete coverage report with optional HTML output.
-    
+
     Args:
         repo_path: Path to repository
         config: Coverage configuration
         html_output_dir: Directory for HTML report (optional)
-        
+
     Returns:
         Tuple of (CoverageResult, html_report_path)
     """

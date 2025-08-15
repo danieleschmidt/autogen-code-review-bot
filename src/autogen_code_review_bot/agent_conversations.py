@@ -60,10 +60,14 @@ class ConversationState:
         """Get messages from a specific round."""
         # For simplicity, we'll consider messages in chronological order
         # In a more sophisticated implementation, we'd track round per message
-        messages_per_round = len(self.messages) // self.round_number if self.round_number > 0 else 0
+        messages_per_round = (
+            len(self.messages) // self.round_number if self.round_number > 0 else 0
+        )
         start_idx = (round_num - 1) * messages_per_round
         end_idx = round_num * messages_per_round
-        return self.messages[start_idx:end_idx] if start_idx < len(self.messages) else []
+        return (
+            self.messages[start_idx:end_idx] if start_idx < len(self.messages) else []
+        )
 
     def get_latest_messages_by_agent(self) -> Dict[str, Message]:
         """Get the latest message from each agent."""
@@ -95,7 +99,9 @@ class ConversationHistory:
         with self._lock:
             return self.conversations.get(conversation_id)
 
-    def update_conversation(self, conversation_id: str, conversation: ConversationState) -> bool:
+    def update_conversation(
+        self, conversation_id: str, conversation: ConversationState
+    ) -> bool:
         """Update an existing conversation."""
         with self._lock:
             if conversation_id in self.conversations:
@@ -107,7 +113,8 @@ class ConversationHistory:
         """Get all active conversations."""
         with self._lock:
             return {
-                conv_id: conv for conv_id, conv in self.conversations.items()
+                conv_id: conv
+                for conv_id, conv in self.conversations.items()
                 if conv.status == "active"
             }
 
@@ -132,8 +139,7 @@ class RefinementCriteria:
 
         # Count agreement messages
         agreement_messages = [
-            msg for msg in messages
-            if msg.message_type == MessageType.AGREEMENT
+            msg for msg in messages if msg.message_type == MessageType.AGREEMENT
         ]
 
         # Calculate consensus ratio
@@ -150,7 +156,8 @@ class RefinementCriteria:
     def meets_confidence_threshold(self, messages: List[Message]) -> bool:
         """Check if messages meet minimum confidence threshold."""
         confident_messages = [
-            msg for msg in messages
+            msg
+            for msg in messages
             if msg.confidence is not None and msg.confidence >= self.min_confidence
         ]
 
@@ -185,7 +192,7 @@ class ConversationManager:
         self,
         code_snippet: str,
         config_path: str,
-        participants: Optional[List[str]] = None
+        participants: Optional[List[str]] = None,
     ) -> str:
         """Start a new conversation between agents."""
         # Load agents from configuration
@@ -201,8 +208,7 @@ class ConversationManager:
 
         # Create conversation state
         conversation = ConversationState(
-            code_snippet=code_snippet,
-            participants=participants
+            code_snippet=code_snippet, participants=participants
         )
 
         # Add to history
@@ -211,14 +217,14 @@ class ConversationManager:
         # Update agents mapping with actual conversation ID
         if final_conversation_id != conversation_id:
             with self._lock:
-                self._active_agents[final_conversation_id] = self._active_agents.pop(conversation_id)
+                self._active_agents[final_conversation_id] = self._active_agents.pop(
+                    conversation_id
+                )
 
         return final_conversation_id
 
     def conduct_discussion(
-        self,
-        conversation_id: str,
-        max_rounds: Optional[int] = None
+        self, conversation_id: str, max_rounds: Optional[int] = None
     ) -> Optional[ConsensusResult]:
         """Conduct a discussion between agents."""
         conversation = self.history.get_conversation(conversation_id)
@@ -242,7 +248,7 @@ class ConversationManager:
                     agent_name=agent_name,
                     content=review,
                     message_type=MessageType.REVIEW,
-                    confidence=0.8  # Default confidence for initial reviews
+                    confidence=0.8,  # Default confidence for initial reviews
                 )
                 conversation.add_message(message)
 
@@ -270,13 +276,15 @@ class ConversationManager:
                     context = self._create_context_for_agent(conversation, agent_name)
                     response = self._generate_agent_response(agent, context)
 
-                    message_type = self._determine_message_type(response, conversation.messages)
+                    message_type = self._determine_message_type(
+                        response, conversation.messages
+                    )
 
                     message = Message(
                         agent_name=agent_name,
                         content=response,
                         message_type=message_type,
-                        confidence=self._estimate_confidence(response)
+                        confidence=self._estimate_confidence(response),
                     )
 
                     conversation.add_message(message)
@@ -286,7 +294,9 @@ class ConversationManager:
             self.history.update_conversation(conversation_id, conversation)
 
         # Calculate final consensus result
-        consensus_reached = self.criteria.has_sufficient_consensus(conversation.messages)
+        consensus_reached = self.criteria.has_sufficient_consensus(
+            conversation.messages
+        )
         confidence_score = self._calculate_overall_confidence(conversation.messages)
 
         result = ConsensusResult(
@@ -295,21 +305,21 @@ class ConversationManager:
             consensus_reached=consensus_reached,
             confidence_score=confidence_score,
             round_count=conversation.round_number,
-            reason=conversation.status
+            reason=conversation.status,
         )
 
         return result
 
-    def _create_context_for_agent(self, conversation: ConversationState, agent_name: str) -> str:
+    def _create_context_for_agent(
+        self, conversation: ConversationState, agent_name: str
+    ) -> str:
         """Create context string for agent based on conversation history."""
         context_parts = [f"Code under review:\n{conversation.code_snippet}\n"]
 
         # Add other agents' messages
         for message in conversation.messages:
             if message.agent_name != agent_name:
-                context_parts.append(
-                    f"{message.agent_name}: {message.content}"
-                )
+                context_parts.append(f"{message.agent_name}: {message.content}")
 
         return "\n".join(context_parts)
 
@@ -327,11 +337,16 @@ class ConversationManager:
         else:
             return response
 
-    def _determine_message_type(self, response: str, previous_messages: List[Message]) -> MessageType:
+    def _determine_message_type(
+        self, response: str, previous_messages: List[Message]
+    ) -> MessageType:
         """Determine the type of message based on content."""
         response_lower = response.lower()
 
-        if any(word in response_lower for word in ["agree", "concur", "approved", "correct"]):
+        if any(
+            word in response_lower
+            for word in ["agree", "concur", "approved", "correct"]
+        ):
             return MessageType.AGREEMENT
         elif any(word in response_lower for word in ["disagree", "incorrect", "wrong"]):
             return MessageType.DISAGREEMENT
@@ -370,8 +385,7 @@ class ConversationManager:
             return 0.0
 
         confidence_scores = [
-            msg.confidence for msg in messages
-            if msg.confidence is not None
+            msg.confidence for msg in messages if msg.confidence is not None
         ]
 
         if not confidence_scores:
@@ -392,7 +406,9 @@ class ConversationManager:
             "message_count": len(conversation.messages),
             "rounds": conversation.round_number,
             "status": conversation.status,
-            "final_consensus": self.criteria.has_sufficient_consensus(conversation.messages)
+            "final_consensus": self.criteria.has_sufficient_consensus(
+                conversation.messages
+            ),
         }
 
     def cleanup_completed_conversations(self, max_age_hours: float = 24.0) -> int:
@@ -407,7 +423,9 @@ class ConversationManager:
                 if conversation.status != "active":
                     # Check if any message is older than cutoff
                     if conversation.messages:
-                        oldest_message_time = min(msg.timestamp for msg in conversation.messages)
+                        oldest_message_time = min(
+                            msg.timestamp for msg in conversation.messages
+                        )
                         if oldest_message_time < cutoff_time:
                             conversations_to_remove.append(conv_id)
 
@@ -425,17 +443,17 @@ def conduct_agent_discussion(
     code_snippet: str,
     config_path: str,
     max_rounds: int = 3,
-    criteria: Optional[RefinementCriteria] = None
+    criteria: Optional[RefinementCriteria] = None,
 ) -> ConsensusResult:
     """
     High-level function to conduct an agent discussion.
-    
+
     Args:
         code_snippet: Code to review and discuss
         config_path: Path to agent configuration file
         max_rounds: Maximum discussion rounds
         criteria: Custom refinement criteria
-    
+
     Returns:
         ConsensusResult with discussion outcome
     """
@@ -451,7 +469,7 @@ def conduct_agent_discussion(
             consensus_reached=False,
             confidence_score=0.0,
             round_count=0,
-            reason="Failed to conduct discussion"
+            reason="Failed to conduct discussion",
         )
 
     return result

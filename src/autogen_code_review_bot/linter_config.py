@@ -3,14 +3,16 @@
 Linter configuration for AutoGen Code Review Bot.
 """
 
-import yaml
 from dataclasses import dataclass
 from pathlib import Path
+
+import yaml
 
 
 @dataclass
 class LinterConfig:
     """Configuration for language-specific linters."""
+
     python: str = "ruff"
     javascript: str = "eslint"
     typescript: str = "eslint"
@@ -25,7 +27,7 @@ class LinterConfig:
     scala: str = "scalastyle"
 
     @classmethod
-    def from_yaml(cls, yaml_path: str) -> 'LinterConfig':
+    def from_yaml(cls, yaml_path: str) -> "LinterConfig":
         """Load linter configuration from YAML file."""
         if not Path(yaml_path).exists():
             raise FileNotFoundError(f"Linter config file not found: {yaml_path}")
@@ -33,5 +35,5 @@ class LinterConfig:
         with open(yaml_path) as f:
             data = yaml.safe_load(f)
 
-        linters = data.get('linters', {})
+        linters = data.get("linters", {})
         return cls(**{k: v for k, v in linters.items() if hasattr(cls, k)})

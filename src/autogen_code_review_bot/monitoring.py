@@ -42,7 +42,7 @@ class HealthCheck:
             "name": self.name,
             "status": self.status,
             "message": self.message,
-            "timestamp": self.timestamp
+            "timestamp": self.timestamp,
         }
 
         if self.response_time_ms is not None:
@@ -106,22 +106,26 @@ class HealthChecker:
                         name=name,
                         status=HealthStatus.UNHEALTHY,
                         message="Health check timeout",
-                        response_time_ms=timeout_seconds * 1000
+                        response_time_ms=timeout_seconds * 1000,
                     )
                 except Exception as e:
                     logger.error(f"Health check error: {name}: {e}")
                     results[name] = HealthCheck(
                         name=name,
                         status=HealthStatus.UNHEALTHY,
-                        message=f"Health check failed: {str(e)}"
+                        message=f"Health check failed: {str(e)}",
                     )
 
-        logger.info(f"Completed {len(results)} health checks",
-                   extra={"total_checks": len(check_functions), "completed": len(results)})
+        logger.info(
+            f"Completed {len(results)} health checks",
+            extra={"total_checks": len(check_functions), "completed": len(results)},
+        )
 
         return results
 
-    def _run_single_check(self, name: str, check_func: Callable[[], HealthCheck]) -> HealthCheck:
+    def _run_single_check(
+        self, name: str, check_func: Callable[[], HealthCheck]
+    ) -> HealthCheck:
         """Run a single health check with timing."""
         start_time = time.time()
 
@@ -142,7 +146,7 @@ class HealthChecker:
                 name=name,
                 status=HealthStatus.UNHEALTHY,
                 message=f"Check failed: {str(e)}",
-                response_time_ms=response_time
+                response_time_ms=response_time,
             )
 
     def get_overall_status(self, check_results: Dict[str, HealthCheck]) -> HealthStatus:
@@ -154,7 +158,7 @@ class HealthChecker:
             HealthStatus.HEALTHY: 0,
             HealthStatus.DEGRADED: 0,
             HealthStatus.UNHEALTHY: 0,
-            HealthStatus.UNKNOWN: 0
+            HealthStatus.UNKNOWN: 0,
         }
 
         for result in check_results.values():
@@ -197,17 +201,14 @@ class HealthChecker:
                 name="system_resources",
                 status=status,
                 message=message,
-                details={
-                    "cpu_percent": cpu_percent,
-                    "memory_percent": memory_percent
-                }
+                details={"cpu_percent": cpu_percent, "memory_percent": memory_percent},
             )
 
         except Exception as e:
             return HealthCheck(
                 name="system_resources",
                 status=HealthStatus.UNKNOWN,
-                message=f"Unable to check system resources: {e}"
+                message=f"Unable to check system resources: {e}",
             )
 
     def _check_disk_space(self) -> HealthCheck:
@@ -229,14 +230,14 @@ class HealthChecker:
                 name="disk_space",
                 status=status,
                 message=message,
-                details={"disk_usage_percent": disk_usage}
+                details={"disk_usage_percent": disk_usage},
             )
 
         except Exception as e:
             return HealthCheck(
                 name="disk_space",
                 status=HealthStatus.UNKNOWN,
-                message=f"Unable to check disk space: {e}"
+                message=f"Unable to check disk space: {e}",
             )
 
     def _check_memory(self) -> HealthCheck:
@@ -261,15 +262,15 @@ class HealthChecker:
                 details={
                     "total_gb": total_gb,
                     "available_gb": available_gb,
-                    "used_percent": memory_percent
-                }
+                    "used_percent": memory_percent,
+                },
             )
 
         except Exception as e:
             return HealthCheck(
                 name="memory",
                 status=HealthStatus.UNKNOWN,
-                message=f"Unable to check memory: {e}"
+                message=f"Unable to check memory: {e}",
             )
 
     def _get_system_stats(self) -> tuple[float, float]:
@@ -277,6 +278,7 @@ class HealthChecker:
         try:
             # Try to use psutil if available
             import psutil
+
             cpu_percent = psutil.cpu_percent(interval=0.1)
             memory_percent = psutil.virtual_memory().percent
             return cpu_percent, memory_percent
@@ -300,11 +302,12 @@ class HealthChecker:
         try:
             # Try to use psutil if available
             import psutil
-            return psutil.disk_usage('/').percent
+
+            return psutil.disk_usage("/").percent
         except ImportError:
             # Fallback using shutil
             try:
-                total, used, free = shutil.disk_usage('/')
+                total, used, free = shutil.disk_usage("/")
                 return (used / total) * 100
             except Exception:
                 return 50.0  # Default assumption
@@ -314,19 +317,16 @@ class HealthChecker:
         try:
             # Try to use psutil if available
             import psutil
+
             memory = psutil.virtual_memory()
             return {
                 "total_gb": memory.total / 1024**3,
                 "available_gb": memory.available / 1024**3,
-                "used_percent": memory.percent
+                "used_percent": memory.percent,
             }
         except ImportError:
             # Fallback estimates
-            return {
-                "total_gb": 8.0,
-                "available_gb": 4.0,
-                "used_percent": 50.0
-            }
+            return {"total_gb": 8.0, "available_gb": 4.0, "used_percent": 50.0}
 
 
 @dataclass
@@ -342,7 +342,12 @@ class MetricValue:
 class MetricsEmitter:
     """Collects and manages application metrics."""
 
-    def __init__(self, auto_cleanup_enabled: bool = False, auto_cleanup_hours: float = 24.0, auto_cleanup_interval: int = 3600):
+    def __init__(
+        self,
+        auto_cleanup_enabled: bool = False,
+        auto_cleanup_hours: float = 24.0,
+        auto_cleanup_interval: int = 3600,
+    ):
         self.metrics: Dict[str, List[MetricValue]] = {}
         self._lock = threading.RLock()
         self.max_values_per_metric = 1000  # Limit memory usage
@@ -358,35 +363,32 @@ class MetricsEmitter:
         if auto_cleanup_enabled:
             self.start_auto_cleanup(auto_cleanup_hours, auto_cleanup_interval)
 
-    def record_counter(self, name: str, value: Union[int, float] = 1, tags: Optional[Dict[str, str]] = None) -> None:
+    def record_counter(
+        self,
+        name: str,
+        value: Union[int, float] = 1,
+        tags: Optional[Dict[str, str]] = None,
+    ) -> None:
         """Record a counter metric (cumulative value)."""
-        metric_value = MetricValue(
-            value=value,
-            tags=tags,
-            metric_type="counter"
-        )
+        metric_value = MetricValue(value=value, tags=tags, metric_type="counter")
 
         self._store_metric(name, metric_value)
         logger.debug(f"Recorded counter metric: {name}={value}")
 
-    def record_gauge(self, name: str, value: Union[int, float], tags: Optional[Dict[str, str]] = None) -> None:
+    def record_gauge(
+        self, name: str, value: Union[int, float], tags: Optional[Dict[str, str]] = None
+    ) -> None:
         """Record a gauge metric (point-in-time value)."""
-        metric_value = MetricValue(
-            value=value,
-            tags=tags,
-            metric_type="gauge"
-        )
+        metric_value = MetricValue(value=value, tags=tags, metric_type="gauge")
 
         self._store_metric(name, metric_value)
         logger.debug(f"Recorded gauge metric: {name}={value}")
 
-    def record_histogram(self, name: str, value: Union[int, float], tags: Optional[Dict[str, str]] = None) -> None:
+    def record_histogram(
+        self, name: str, value: Union[int, float], tags: Optional[Dict[str, str]] = None
+    ) -> None:
         """Record a histogram metric (distribution of values)."""
-        metric_value = MetricValue(
-            value=value,
-            tags=tags,
-            metric_type="histogram"
-        )
+        metric_value = MetricValue(value=value, tags=tags, metric_type="histogram")
 
         self._store_metric(name, metric_value)
         logger.debug(f"Recorded histogram metric: {name}={value}")
@@ -401,7 +403,7 @@ class MetricsEmitter:
 
             # Limit memory usage by keeping only recent values
             if len(self.metrics[name]) > self.max_values_per_metric:
-                self.metrics[name] = self.metrics[name][-self.max_values_per_metric:]
+                self.metrics[name] = self.metrics[name][-self.max_values_per_metric :]
 
     def get_metrics(self, since_timestamp: Optional[float] = None) -> Dict[str, Any]:
         """Get current metrics, optionally filtered by timestamp."""
@@ -415,7 +417,9 @@ class MetricsEmitter:
                 # Filter by timestamp if specified
                 filtered_values = values
                 if since_timestamp:
-                    filtered_values = [v for v in values if v.timestamp >= since_timestamp]
+                    filtered_values = [
+                        v for v in values if v.timestamp >= since_timestamp
+                    ]
 
                 if not filtered_values:
                     continue
@@ -427,7 +431,7 @@ class MetricsEmitter:
                     "value": latest.value,
                     "timestamp": latest.timestamp,
                     "type": latest.metric_type,
-                    "count": len(filtered_values)
+                    "count": len(filtered_values),
                 }
 
                 if latest.tags:
@@ -440,7 +444,11 @@ class MetricsEmitter:
                         "min": min(values_only),
                         "max": max(values_only),
                         "avg": sum(values_only) / len(values_only),
-                        "sum": sum(values_only) if latest.metric_type == "counter" else None
+                        "sum": (
+                            sum(values_only)
+                            if latest.metric_type == "counter"
+                            else None
+                        ),
                     }
 
             return result
@@ -460,8 +468,7 @@ class MetricsEmitter:
                 for name in list(self.metrics.keys()):
                     original_count = len(self.metrics[name])
                     self.metrics[name] = [
-                        v for v in self.metrics[name]
-                        if v.timestamp >= cutoff_time
+                        v for v in self.metrics[name] if v.timestamp >= cutoff_time
                     ]
                     cleared_count += original_count - len(self.metrics[name])
 
@@ -469,12 +476,17 @@ class MetricsEmitter:
                     if not self.metrics[name]:
                         del self.metrics[name]
 
-        logger.info(f"Cleared {cleared_count} metric values", extra={"cutoff_hours": older_than_hours})
+        logger.info(
+            f"Cleared {cleared_count} metric values",
+            extra={"cutoff_hours": older_than_hours},
+        )
         return cleared_count
 
-    def start_auto_cleanup(self, cleanup_hours: float = 24.0, interval_seconds: int = 3600) -> None:
+    def start_auto_cleanup(
+        self, cleanup_hours: float = 24.0, interval_seconds: int = 3600
+    ) -> None:
         """Start automatic cleanup of old metrics.
-        
+
         Args:
             cleanup_hours: Remove metrics older than this many hours
             interval_seconds: How often to run cleanup in seconds
@@ -489,13 +501,13 @@ class MetricsEmitter:
         self._cleanup_stop_event.clear()
 
         self._cleanup_thread = threading.Thread(
-            target=self._auto_cleanup_loop,
-            daemon=True,
-            name="MetricsCleanup"
+            target=self._auto_cleanup_loop, daemon=True, name="MetricsCleanup"
         )
         self._cleanup_thread.start()
 
-        logger.info(f"Started automatic metrics cleanup: {cleanup_hours}h retention, {interval_seconds}s interval")
+        logger.info(
+            f"Started automatic metrics cleanup: {cleanup_hours}h retention, {interval_seconds}s interval"
+        )
 
     def stop_auto_cleanup(self) -> None:
         """Stop automatic cleanup of metrics."""
@@ -525,10 +537,10 @@ class MetricsEmitter:
 
     def _cleanup_old_metrics(self, cleanup_hours: float) -> int:
         """Internal method to clean up old metrics.
-        
+
         Args:
             cleanup_hours: Remove metrics older than this many hours
-            
+
         Returns:
             Number of metric values removed
         """
@@ -588,18 +600,14 @@ class SLITracker:
         slo_name: str,
         success: bool,
         value: Optional[float] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> None:
         """Record an SLI measurement."""
         if slo_name not in self.slos:
             logger.warning(f"Recording measurement for unregistered SLO: {slo_name}")
             return
 
-        measurement = SLIMeasurement(
-            success=success,
-            value=value,
-            metadata=metadata
-        )
+        measurement = SLIMeasurement(success=success, value=value, metadata=metadata)
 
         with self._lock:
             if slo_name not in self.measurements:
@@ -666,7 +674,7 @@ class SLITracker:
             "is_met": is_met,
             "measurement_count": measurement_count,
             "window_hours": slo.measurement_window_hours,
-            "description": slo.description
+            "description": slo.description,
         }
 
     def _cleanup_old_measurements(self, slo_name: str) -> None:
@@ -704,14 +712,14 @@ class MonitoringServer:
                 name="system_availability",
                 target=99.5,
                 measurement_window_hours=24,
-                description="System should be available 99.5% of the time"
+                description="System should be available 99.5% of the time",
             ),
             SLODefinition(
                 name="api_response_time",
                 target=95.0,
                 measurement_window_hours=1,
-                description="95% of API requests should complete within acceptable time"
-            )
+                description="95% of API requests should complete within acceptable time",
+            ),
         ]
 
         for slo in default_slos:
@@ -734,14 +742,19 @@ class MonitoringServer:
         return {
             "timestamp": time.time(),
             "overall_health": overall_health,
-            "health_checks": {name: check.to_dict() for name, check in health_results.items()},
+            "health_checks": {
+                name: check.to_dict() for name, check in health_results.items()
+            },
             "metrics": metrics,
-            "slos": slo_status
+            "slos": slo_status,
         }
 
 
-def create_health_endpoint(health_checker: HealthChecker) -> Callable[[], Dict[str, Any]]:
+def create_health_endpoint(
+    health_checker: HealthChecker,
+) -> Callable[[], Dict[str, Any]]:
     """Create a health endpoint function for web frameworks."""
+
     def health_endpoint():
         """Health endpoint that returns system health status."""
         try:
@@ -751,14 +764,14 @@ def create_health_endpoint(health_checker: HealthChecker) -> Callable[[], Dict[s
             return {
                 "status": overall_status,
                 "timestamp": time.time(),
-                "checks": {name: check.to_dict() for name, check in results.items()}
+                "checks": {name: check.to_dict() for name, check in results.items()},
             }
         except Exception as e:
             logger.error(f"Health endpoint error: {e}")
             return {
                 "status": HealthStatus.UNKNOWN,
                 "timestamp": time.time(),
-                "error": str(e)
+                "error": str(e),
             }
 
     return health_endpoint
@@ -776,11 +789,8 @@ def get_system_health() -> Dict[str, Any]:
             "cpu_percent": cpu_percent,
             "memory_percent": memory_percent,
             "disk_usage": disk_usage,
-            "timestamp": time.time()
+            "timestamp": time.time(),
         }
     except Exception as e:
         logger.error(f"Error getting system health: {e}")
-        return {
-            "error": str(e),
-            "timestamp": time.time()
-        }
+        return {"error": str(e), "timestamp": time.time()}

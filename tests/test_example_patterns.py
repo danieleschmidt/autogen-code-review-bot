@@ -322,4 +322,3 @@ class TestConfigurationPatterns:
         
         assert config["agents"]["coder"]["model"] == "gpt-4"
         assert config["agents"]["coder"]["temperature"] == 0.3
-EOF < /dev/null

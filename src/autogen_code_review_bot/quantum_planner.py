@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 class TaskPriority(Enum):
     """Task priority levels with quantum probability amplitudes."""
+
     CRITICAL = (1.0, "Critical")
     HIGH = (0.8, "High")
     MEDIUM = (0.6, "Medium")
@@ -35,15 +36,17 @@ class TaskPriority(Enum):
 
 class TaskState(Enum):
     """Quantum task states."""
+
     SUPERPOSITION = "superposition"  # Multiple states simultaneously
-    COLLAPSED = "collapsed"          # Definite state after measurement
-    ENTANGLED = "entangled"         # Linked to other tasks
-    ISOLATED = "isolated"           # Independent task
+    COLLAPSED = "collapsed"  # Definite state after measurement
+    ENTANGLED = "entangled"  # Linked to other tasks
+    ISOLATED = "isolated"  # Independent task
 
 
 @dataclass
 class QuantumTask:
     """A task with quantum properties."""
+
     id: str
     title: str
     description: str
@@ -82,9 +85,9 @@ class QuantumTask:
             return self.measured_priority
 
         # Calculate probability distribution
-        total_amplitude = sum(amp ** 2 for amp in self.priority_amplitudes.values())
+        total_amplitude = sum(amp**2 for amp in self.priority_amplitudes.values())
         probabilities = {
-            priority: (amp ** 2) / total_amplitude
+            priority: (amp**2) / total_amplitude
             for priority, amp in self.priority_amplitudes.items()
         }
 
@@ -105,7 +108,9 @@ class QuantumTask:
         self.state = TaskState.COLLAPSED
         return self.measured_priority
 
-    def apply_interference(self, other_task: 'QuantumTask', coupling_strength: float = 0.1) -> None:
+    def apply_interference(
+        self, other_task: "QuantumTask", coupling_strength: float = 0.1
+    ) -> None:
         """Apply quantum interference with another task."""
         if other_task.id in self.entangled_tasks:
             # Stronger interference for entangled tasks
@@ -113,11 +118,13 @@ class QuantumTask:
 
         # Modify priority amplitudes based on interference
         for priority in TaskPriority:
-            phase_shift = coupling_strength * other_task.priority_amplitudes.get(priority, 0)
+            phase_shift = coupling_strength * other_task.priority_amplitudes.get(
+                priority, 0
+            )
             self.priority_amplitudes[priority] += phase_shift
 
         # Normalize amplitudes
-        total_norm = math.sqrt(sum(amp ** 2 for amp in self.priority_amplitudes.values()))
+        total_norm = math.sqrt(sum(amp**2 for amp in self.priority_amplitudes.values()))
         if total_norm > 0:
             self.priority_amplitudes = {
                 priority: amp / total_norm
@@ -151,14 +158,16 @@ class QuantumScheduler:
         task_list = list(self.tasks.values())
 
         for i, task1 in enumerate(task_list):
-            for task2 in task_list[i+1:]:
+            for task2 in task_list[i + 1 :]:
                 # Calculate coupling strength based on similarity and dependencies
                 coupling = self._calculate_coupling_strength(task1, task2)
                 if coupling > 0:
                     task1.apply_interference(task2, coupling)
                     task2.apply_interference(task1, coupling)
 
-    def _calculate_coupling_strength(self, task1: QuantumTask, task2: QuantumTask) -> float:
+    def _calculate_coupling_strength(
+        self, task1: QuantumTask, task2: QuantumTask
+    ) -> float:
         """Calculate quantum coupling strength between tasks."""
         coupling = 0.0
 
@@ -193,17 +202,21 @@ class QuantumScheduler:
 
         # Record measurement
         measurement_record = {
-            'timestamp': time.time(),
-            'tasks_measured': len(measured_tasks),
-            'entangled_pairs': len(self.quantum_circuits),
-            'schedule_length': len(scheduled_tasks)
+            "timestamp": time.time(),
+            "tasks_measured": len(measured_tasks),
+            "entangled_pairs": len(self.quantum_circuits),
+            "schedule_length": len(scheduled_tasks),
         }
         self.measurement_history.append(measurement_record)
 
-        logger.info(f"Quantum measurement completed: {len(scheduled_tasks)} tasks scheduled")
+        logger.info(
+            f"Quantum measurement completed: {len(scheduled_tasks)} tasks scheduled"
+        )
         return scheduled_tasks
 
-    def _topological_sort_with_priority(self, tasks: List[QuantumTask]) -> List[QuantumTask]:
+    def _topological_sort_with_priority(
+        self, tasks: List[QuantumTask]
+    ) -> List[QuantumTask]:
         """Topological sort considering both dependencies and quantum-measured priorities."""
         # Create adjacency list for dependencies
         in_degree = {task.id: 0 for task in tasks}
@@ -229,7 +242,9 @@ class QuantumScheduler:
 
         while any(priority_queues.values()):
             # Process highest priority tasks first
-            for priority in sorted(TaskPriority, key=lambda p: p.amplitude, reverse=True):
+            for priority in sorted(
+                TaskPriority, key=lambda p: p.amplitude, reverse=True
+            ):
                 if priority_queues[priority]:
                     task = priority_queues[priority].pop(0)
                     task.execution_order = execution_order
@@ -240,8 +255,12 @@ class QuantumScheduler:
                     for dependent_id in adj_list[task.id]:
                         in_degree[dependent_id] -= 1
                         if in_degree[dependent_id] == 0:
-                            dependent_task = next(t for t in tasks if t.id == dependent_id)
-                            dep_priority = dependent_task.measured_priority or TaskPriority.MEDIUM
+                            dependent_task = next(
+                                t for t in tasks if t.id == dependent_id
+                            )
+                            dep_priority = (
+                                dependent_task.measured_priority or TaskPriority.MEDIUM
+                            )
                             priority_queues[dep_priority].append(dependent_task)
                     break
 
@@ -250,15 +269,19 @@ class QuantumScheduler:
     def get_quantum_state_summary(self) -> Dict:
         """Get summary of current quantum system state."""
         total_tasks = len(self.tasks)
-        entangled_tasks = sum(1 for task in self.tasks.values() if task.state == TaskState.ENTANGLED)
-        collapsed_tasks = sum(1 for task in self.tasks.values() if task.state == TaskState.COLLAPSED)
+        entangled_tasks = sum(
+            1 for task in self.tasks.values() if task.state == TaskState.ENTANGLED
+        )
+        collapsed_tasks = sum(
+            1 for task in self.tasks.values() if task.state == TaskState.COLLAPSED
+        )
 
         return {
-            'total_tasks': total_tasks,
-            'entangled_tasks': entangled_tasks,
-            'collapsed_tasks': collapsed_tasks,
-            'quantum_circuits': len(self.quantum_circuits),
-            'measurement_history_length': len(self.measurement_history)
+            "total_tasks": total_tasks,
+            "entangled_tasks": entangled_tasks,
+            "collapsed_tasks": collapsed_tasks,
+            "quantum_circuits": len(self.quantum_circuits),
+            "measurement_history_length": len(self.measurement_history),
         }
 
 
@@ -269,8 +292,14 @@ class QuantumTaskPlanner:
         self.scheduler = QuantumScheduler()
         self.planning_history: List[Dict] = []
 
-    def create_task(self, task_id: str, title: str, description: str,
-                   estimated_effort: float = 1.0, dependencies: Optional[List[str]] = None) -> QuantumTask:
+    def create_task(
+        self,
+        task_id: str,
+        title: str,
+        description: str,
+        estimated_effort: float = 1.0,
+        dependencies: Optional[List[str]] = None,
+    ) -> QuantumTask:
         """Create a new quantum task."""
         dependencies_set = set(dependencies or [])
         task = QuantumTask(
@@ -278,12 +307,14 @@ class QuantumTaskPlanner:
             title=title,
             description=description,
             estimated_effort=estimated_effort,
-            dependencies=dependencies_set
+            dependencies=dependencies_set,
         )
         self.scheduler.add_task(task)
         return task
 
-    def set_task_priority_bias(self, task_id: str, priority: TaskPriority, bias_strength: float = 0.3) -> None:
+    def set_task_priority_bias(
+        self, task_id: str, priority: TaskPriority, bias_strength: float = 0.3
+    ) -> None:
         """Bias a task toward a specific priority (quantum amplitude manipulation)."""
         if task_id in self.scheduler.tasks:
             task = self.scheduler.tasks[task_id]
@@ -292,13 +323,17 @@ class QuantumTaskPlanner:
             task.priority_amplitudes[priority] += bias_strength
 
             # Normalize amplitudes
-            total_norm = math.sqrt(sum(amp ** 2 for amp in task.priority_amplitudes.values()))
+            total_norm = math.sqrt(
+                sum(amp**2 for amp in task.priority_amplitudes.values())
+            )
             if total_norm > 0:
                 task.priority_amplitudes = {
                     p: amp / total_norm for p, amp in task.priority_amplitudes.items()
                 }
 
-            logger.info(f"Applied priority bias to task {task_id}: {priority.label} (+{bias_strength})")
+            logger.info(
+                f"Applied priority bias to task {task_id}: {priority.label} (+{bias_strength})"
+            )
 
     def create_task_entanglement(self, task1_id: str, task2_id: str) -> None:
         """Create quantum entanglement between tasks."""
@@ -321,30 +356,34 @@ class QuantumTaskPlanner:
         planning_time = time.time() - start_time
 
         execution_plan = {
-            'plan_id': f"qplan_{int(time.time())}",
-            'generation_time': planning_time,
-            'total_tasks': len(scheduled_tasks),
-            'total_estimated_effort': total_effort,
-            'critical_path_length': critical_path_length,
-            'quantum_state_initial': initial_state,
-            'quantum_state_final': self.scheduler.get_quantum_state_summary(),
-            'scheduled_tasks': [
+            "plan_id": f"qplan_{int(time.time())}",
+            "generation_time": planning_time,
+            "total_tasks": len(scheduled_tasks),
+            "total_estimated_effort": total_effort,
+            "critical_path_length": critical_path_length,
+            "quantum_state_initial": initial_state,
+            "quantum_state_final": self.scheduler.get_quantum_state_summary(),
+            "scheduled_tasks": [
                 {
-                    'id': task.id,
-                    'title': task.title,
-                    'description': task.description,
-                    'estimated_effort': task.estimated_effort,
-                    'measured_priority': task.measured_priority.label if task.measured_priority else None,
-                    'execution_order': task.execution_order,
-                    'dependencies': list(task.dependencies),
-                    'entangled_with': list(task.entangled_tasks)
+                    "id": task.id,
+                    "title": task.title,
+                    "description": task.description,
+                    "estimated_effort": task.estimated_effort,
+                    "measured_priority": (
+                        task.measured_priority.label if task.measured_priority else None
+                    ),
+                    "execution_order": task.execution_order,
+                    "dependencies": list(task.dependencies),
+                    "entangled_with": list(task.entangled_tasks),
                 }
                 for task in scheduled_tasks
-            ]
+            ],
         }
 
         self.planning_history.append(execution_plan)
-        logger.info(f"Generated quantum execution plan with {len(scheduled_tasks)} tasks in {planning_time:.3f}s")
+        logger.info(
+            f"Generated quantum execution plan with {len(scheduled_tasks)} tasks in {planning_time:.3f}s"
+        )
 
         return execution_plan
 
@@ -374,23 +413,27 @@ class QuantumTaskPlanner:
 
     def export_plan_to_json(self, plan: Dict, filename: str) -> None:
         """Export execution plan to JSON file."""
-        with open(filename, 'w') as f:
+        with open(filename, "w") as f:
             json.dump(plan, f, indent=2, default=str)
         logger.info(f"Execution plan exported to {filename}")
 
     def get_planning_analytics(self) -> Dict:
         """Get analytics on planning performance and quantum behavior."""
         if not self.planning_history:
-            return {'message': 'No planning history available'}
+            return {"message": "No planning history available"}
 
         total_plans = len(self.planning_history)
-        avg_planning_time = sum(plan['generation_time'] for plan in self.planning_history) / total_plans
-        avg_tasks_per_plan = sum(plan['total_tasks'] for plan in self.planning_history) / total_plans
+        avg_planning_time = (
+            sum(plan["generation_time"] for plan in self.planning_history) / total_plans
+        )
+        avg_tasks_per_plan = (
+            sum(plan["total_tasks"] for plan in self.planning_history) / total_plans
+        )
 
         return {
-            'total_plans_generated': total_plans,
-            'average_planning_time_seconds': avg_planning_time,
-            'average_tasks_per_plan': avg_tasks_per_plan,
-            'quantum_measurements_performed': len(self.scheduler.measurement_history),
-            'current_quantum_state': self.scheduler.get_quantum_state_summary()
+            "total_plans_generated": total_plans,
+            "average_planning_time_seconds": avg_planning_time,
+            "average_tasks_per_plan": avg_tasks_per_plan,
+            "quantum_measurements_performed": len(self.scheduler.measurement_history),
+            "current_quantum_state": self.scheduler.get_quantum_state_summary(),
         }

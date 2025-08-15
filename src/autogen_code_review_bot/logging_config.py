@@ -8,7 +8,7 @@ from contextvars import ContextVar
 from typing import Any, Dict, Optional
 
 # Context variable for request tracking
-request_id: ContextVar[Optional[str]] = ContextVar('request_id', default=None)
+request_id: ContextVar[Optional[str]] = ContextVar("request_id", default=None)
 
 
 class StructuredFormatter(logging.Formatter):
@@ -24,6 +24,7 @@ class StructuredFormatter(logging.Formatter):
         message = record.getMessage()
         try:
             from .token_security import TokenMasker
+
             message = TokenMasker.mask_sensitive_data(message)
         except ImportError:
             # Fallback if token_security module is not available
@@ -47,6 +48,7 @@ class StructuredFormatter(logging.Formatter):
             exception_text = self.formatException(record.exc_info)
             try:
                 from .token_security import TokenMasker
+
                 exception_text = TokenMasker.mask_sensitive_data(exception_text)
             except ImportError:
                 pass
@@ -54,17 +56,39 @@ class StructuredFormatter(logging.Formatter):
 
         # Add any extra fields with token masking
         extra_fields = {
-            k: v for k, v in record.__dict__.items()
-            if k not in ('name', 'msg', 'args', 'levelname', 'levelno', 'pathname',
-                        'filename', 'module', 'lineno', 'funcName', 'created',
-                        'msecs', 'relativeCreated', 'thread', 'threadName',
-                        'processName', 'process', 'getMessage', 'exc_info', 'exc_text',
-                        'stack_info', 'message')
+            k: v
+            for k, v in record.__dict__.items()
+            if k
+            not in (
+                "name",
+                "msg",
+                "args",
+                "levelname",
+                "levelno",
+                "pathname",
+                "filename",
+                "module",
+                "lineno",
+                "funcName",
+                "created",
+                "msecs",
+                "relativeCreated",
+                "thread",
+                "threadName",
+                "processName",
+                "process",
+                "getMessage",
+                "exc_info",
+                "exc_text",
+                "stack_info",
+                "message",
+            )
         }
 
         # Mask sensitive data in extra fields
         try:
             from .token_security import TokenMasker
+
             extra_fields = TokenMasker.mask_dict(extra_fields)
         except ImportError:
             # Fallback if token_security module is not available
@@ -75,7 +99,9 @@ class StructuredFormatter(logging.Formatter):
         return json.dumps(log_entry, default=str)
 
 
-def configure_logging(level: str = "INFO", service_name: str = "autogen-code-review-bot") -> None:
+def configure_logging(
+    level: str = "INFO", service_name: str = "autogen-code-review-bot"
+) -> None:
     """Configure structured JSON logging for the application."""
 
     # Remove any existing handlers
@@ -114,26 +140,29 @@ def get_request_id() -> Optional[str]:
     return request_id.get()
 
 
-def log_operation_start(logger: logging.Logger, operation: str, **kwargs: Any) -> Dict[str, Any]:
+def log_operation_start(
+    logger: logging.Logger, operation: str, **kwargs: Any
+) -> Dict[str, Any]:
     """Log the start of an operation with timing context."""
-    context = {
-        "operation": operation,
-        "start_time": time.time(),
-        **kwargs
-    }
+    context = {"operation": operation, "start_time": time.time(), **kwargs}
     logger.info("Operation started", extra=context)
     return context
 
 
-def log_operation_end(logger: logging.Logger, context: Dict[str, Any],
-                     success: bool = True, error: Optional[str] = None, **kwargs: Any) -> None:
+def log_operation_end(
+    logger: logging.Logger,
+    context: Dict[str, Any],
+    success: bool = True,
+    error: Optional[str] = None,
+    **kwargs: Any,
+) -> None:
     """Log the end of an operation with duration and result."""
     duration = time.time() - context["start_time"]
     log_data = {
         **context,
         "duration_seconds": round(duration, 3),
         "success": success,
-        **kwargs
+        **kwargs,
     }
 
     if error:

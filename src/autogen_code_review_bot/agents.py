@@ -13,6 +13,7 @@ from .agent_templates import default_templates
 # Configuration error class (will be imported from config_validation when needed)
 class ConfigError(Exception):
     """Configuration error for agent loading."""
+
     pass
 
 
@@ -68,16 +69,20 @@ def load_agents_from_yaml(path: str) -> Dict[str, BaseAgent]:
         # Validate configuration using our validation framework
         data = validate_config_file(path, "agent")
 
-        logger.info("Successfully loaded and validated agent configuration",
-                   extra={"config_path": path})
+        logger.info(
+            "Successfully loaded and validated agent configuration",
+            extra={"config_path": path},
+        )
 
     except (ConfigError, ValidationError) as e:
-        logger.error(f"Agent configuration validation failed: {e}",
-                    extra={"config_path": path})
+        logger.error(
+            f"Agent configuration validation failed: {e}", extra={"config_path": path}
+        )
         raise ConfigError(f"Invalid agent configuration in {path}: {e}")
     except (OSError, PermissionError) as e:
-        logger.error(f"Unable to read agent configuration file: {e}",
-                    extra={"config_path": path})
+        logger.error(
+            f"Unable to read agent configuration file: {e}", extra={"config_path": path}
+        )
         raise ConfigError(f"Cannot read agent configuration file {path}: {e}")
 
     agents = {}
@@ -93,11 +98,17 @@ def load_agents_from_yaml(path: str) -> Dict[str, BaseAgent]:
             agent_config = AgentConfig(**cfg)
             agent_cls = CoderAgent if role == "coder" else ReviewerAgent
             agents[role] = agent_cls(role, agent_config)
-            logger.debug(f"Successfully created {role} agent",
-                        extra={"model": agent_config.model, "focus_areas": agent_config.focus_areas})
+            logger.debug(
+                f"Successfully created {role} agent",
+                extra={
+                    "model": agent_config.model,
+                    "focus_areas": agent_config.focus_areas,
+                },
+            )
         except TypeError as e:
-            logger.error(f"Invalid configuration for {role} agent: {e}",
-                        extra={"config": cfg})
+            logger.error(
+                f"Invalid configuration for {role} agent: {e}", extra={"config": cfg}
+            )
             raise ConfigError(f"Invalid {role} agent configuration: {e}")
 
     if not agents:
@@ -107,8 +118,12 @@ def load_agents_from_yaml(path: str) -> Dict[str, BaseAgent]:
     if "response_templates" in data:
         try:
             default_templates.load_from_config(data["response_templates"])
-            logger.info("Successfully loaded custom response templates",
-                       extra={"available_templates": default_templates.get_available_templates()})
+            logger.info(
+                "Successfully loaded custom response templates",
+                extra={
+                    "available_templates": default_templates.get_available_templates()
+                },
+            )
         except Exception as e:
             logger.warning(f"Failed to load response templates, using defaults: {e}")
 
@@ -174,7 +189,9 @@ class ConversationManager:
         self.temperature = temperature
         self.max_conversation_turns = max_conversation_turns
 
-    def start_conversation(self, agents: List[BaseAgent], code: str) -> AgentConversation:
+    def start_conversation(
+        self, agents: List[BaseAgent], code: str
+    ) -> AgentConversation:
         """Start a new conversation between agents."""
         return AgentConversation(agents, code, self.max_conversation_turns)
 
@@ -210,7 +227,9 @@ class ConversationManager:
                 conversation.add_turn(agent.name, response)
 
                 # Check if conversation should be resolved
-                if self._detect_resolution(conversation.turns[-3:]):  # Check last 3 turns
+                if self._detect_resolution(
+                    conversation.turns[-3:]
+                ):  # Check last 3 turns
                     conversation.resolve("Agents reached consensus")
                     break
 
@@ -223,8 +242,16 @@ class ConversationManager:
             return False
 
         # Simple heuristic: look for conflicting keywords
-        positive_words = ['good', 'solid', 'clean', 'excellent', 'well', 'nice']
-        negative_words = ['bug', 'issue', 'problem', 'error', 'security', 'vulnerability', 'concern']
+        positive_words = ["good", "solid", "clean", "excellent", "well", "nice"]
+        negative_words = [
+            "bug",
+            "issue",
+            "problem",
+            "error",
+            "security",
+            "vulnerability",
+            "concern",
+        ]
 
         review_sentiments = []
         for review in reviews.values():
@@ -233,11 +260,11 @@ class ConversationManager:
             negative_count = sum(1 for word in negative_words if word in review_lower)
 
             if negative_count > positive_count:
-                review_sentiments.append('negative')
+                review_sentiments.append("negative")
             elif positive_count > negative_count:
-                review_sentiments.append('positive')
+                review_sentiments.append("positive")
             else:
-                review_sentiments.append('neutral')
+                review_sentiments.append("neutral")
 
         # Discuss if there are conflicting sentiments
         return len(set(review_sentiments)) > 1
@@ -248,9 +275,19 @@ class ConversationManager:
             return False
 
         agreement_keywords = [
-            'agree', 'agreed', 'consensus', 'resolved', 'settled',
-            'right', 'correct', 'exactly', 'perfect', 'sounds good',
-            'makes sense', 'good point', 'you\'re right'
+            "agree",
+            "agreed",
+            "consensus",
+            "resolved",
+            "settled",
+            "right",
+            "correct",
+            "exactly",
+            "perfect",
+            "sounds good",
+            "makes sense",
+            "good point",
+            "you're right",
         ]
 
         recent_messages = [turn.message.lower() for turn in recent_turns[-2:]]
@@ -260,7 +297,9 @@ class ConversationManager:
             for message in recent_messages
         )
 
-    def _generate_agent_response(self, agent: BaseAgent, code: str, context: List[str]) -> str:
+    def _generate_agent_response(
+        self, agent: BaseAgent, code: str, context: List[str]
+    ) -> str:
         """Generate a response from an agent based on context using configurable templates."""
         # This is a simplified implementation - in a real system,
         # this would call an LLM API with the agent's personality
@@ -324,7 +363,9 @@ def run_agent_conversation(code: str, config_path: str) -> str:
         # Fall back to simple review if not enough agents
         dual_result = run_dual_review(code, config_path)
         if not dual_result:
-            return "No agents available for code review. Please check your configuration."
+            return (
+                "No agents available for code review. Please check your configuration."
+            )
         return str(dual_result)
 
     manager = ConversationManager()
@@ -337,5 +378,7 @@ def run_agent_conversation(code: str, config_path: str) -> str:
         # Fallback to dual review if conversation fails
         dual_result = run_dual_review(code, config_path)
         if not dual_result:
-            return f"Agent conversation failed and no fallback agents available: {str(e)}"
+            return (
+                f"Agent conversation failed and no fallback agents available: {str(e)}"
+            )
         return f"Agent conversation failed, fallback result: {str(dual_result)}"

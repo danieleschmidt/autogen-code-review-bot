@@ -28,7 +28,12 @@ if TYPE_CHECKING:  # pragma: no cover - type checking only
 class GitHubError(Exception):
     """Base class for GitHub API errors."""
 
-    def __init__(self, message: str, status_code: Optional[int] = None, response_headers: Optional[dict] = None):
+    def __init__(
+        self,
+        message: str,
+        status_code: Optional[int] = None,
+        response_headers: Optional[dict] = None,
+    ):
         super().__init__(message)
         self.status_code = status_code
         self.response_headers = response_headers or {}
@@ -38,7 +43,12 @@ class GitHubError(Exception):
 class RateLimitError(GitHubError):
     """Raised when GitHub API rate limit is exceeded."""
 
-    def __init__(self, message: str, reset_time: Optional[int] = None, remaining: Optional[int] = None):
+    def __init__(
+        self,
+        message: str,
+        reset_time: Optional[int] = None,
+        remaining: Optional[int] = None,
+    ):
         super().__init__(message, status_code=429)
         self.reset_time = reset_time
         self.remaining = remaining
@@ -55,7 +65,9 @@ class GitHubConnectionError(GitHubError):
     """Raised when connection to GitHub fails."""
 
     def __init__(self, message: str, original_error: Optional[Exception] = None):
-        super().__init__(f"GitHub connection failed: {message}. Please check network connectivity and try again.")
+        super().__init__(
+            f"GitHub connection failed: {message}. Please check network connectivity and try again."
+        )
         self.original_error = original_error
 
 
@@ -71,18 +83,20 @@ def _get_token(token: str | None) -> str:
 
 # Configure circuit breaker for GitHub API
 _github_circuit_breaker_config = CircuitBreakerConfig(
-    failure_threshold=5,      # Open after 5 failures
-    recovery_timeout=60.0,    # Try recovery after 60 seconds
-    success_threshold=3,      # Close after 3 successes
-    request_timeout=30.0,     # 30 second request timeout
-    max_retries=3,           # Maximum 3 retry attempts
-    base_delay=0.5,          # Start with 0.5 second delay
-    max_delay=30.0,          # Maximum 30 second delay
-    jitter_factor=0.2,       # 20% jitter to prevent thundering herd
-    monitoring_window=50     # Track last 50 requests
+    failure_threshold=5,  # Open after 5 failures
+    recovery_timeout=60.0,  # Try recovery after 60 seconds
+    success_threshold=3,  # Close after 3 successes
+    request_timeout=30.0,  # 30 second request timeout
+    max_retries=3,  # Maximum 3 retry attempts
+    base_delay=0.5,  # Start with 0.5 second delay
+    max_delay=30.0,  # Maximum 30 second delay
+    jitter_factor=0.2,  # 20% jitter to prevent thundering herd
+    monitoring_window=50,  # Track last 50 requests
 )
 
-_github_circuit_breaker = get_circuit_breaker("github_api", _github_circuit_breaker_config)
+_github_circuit_breaker = get_circuit_breaker(
+    "github_api", _github_circuit_breaker_config
+)
 _retry_strategy = RetryStrategy(_github_circuit_breaker_config)
 
 
@@ -98,7 +112,7 @@ def _request_with_retries(
     context: RequestContext | None = None,
 ) -> requests.Response:
     """Return a ``requests`` response using enhanced retry logic with circuit breaker.
-    
+
     Features:
     - Circuit breaker protection against cascading failures
     - Differentiated error handling (rate limits, client errors, server errors)
@@ -118,7 +132,7 @@ def _request_with_retries(
         method=method,
         url=url,
         max_retries=retries,
-        circuit_breaker_state=_github_circuit_breaker.state.value
+        circuit_breaker_state=_github_circuit_breaker.state.value,
     )
 
     def make_request() -> requests.Response:
@@ -135,15 +149,15 @@ def _request_with_retries(
         # Check for specific HTTP status codes before raising
         if resp.status_code == 429:
             # Rate limit handling
-            reset_time = resp.headers.get('X-RateLimit-Reset')
-            remaining = resp.headers.get('X-RateLimit-Remaining', '0')
+            reset_time = resp.headers.get("X-RateLimit-Reset")
+            remaining = resp.headers.get("X-RateLimit-Remaining", "0")
 
             reset_timestamp = int(reset_time) if reset_time else None
 
             raise RateLimitError(
                 "GitHub API rate limit exceeded",
                 reset_time=reset_timestamp,
-                remaining=int(remaining)
+                remaining=int(remaining),
             )
 
         elif 400 <= resp.status_code < 500:
@@ -152,16 +166,26 @@ def _request_with_retries(
             if resp.status_code == 401:
                 error_msg = "GitHub API authentication failed. Please check your token."
             elif resp.status_code == 403:
-                error_msg = "GitHub API access forbidden. Please check your token permissions."
+                error_msg = (
+                    "GitHub API access forbidden. Please check your token permissions."
+                )
             elif resp.status_code == 404:
                 error_msg = "GitHub API resource not found. Please check the repository and PR number."
 
-            raise GitHubError(error_msg, status_code=resp.status_code, response_headers=dict(resp.headers))
+            raise GitHubError(
+                error_msg,
+                status_code=resp.status_code,
+                response_headers=dict(resp.headers),
+            )
 
         elif resp.status_code >= 500:
             # Server errors (should be retried)
             error_msg = f"GitHub API server error: {resp.status_code}"
-            raise GitHubError(error_msg, status_code=resp.status_code, response_headers=dict(resp.headers))
+            raise GitHubError(
+                error_msg,
+                status_code=resp.status_code,
+                response_headers=dict(resp.headers),
+            )
 
         # If we get here, request was successful
         resp.raise_for_status()  # This should not raise for 2xx codes
@@ -176,7 +200,7 @@ def _request_with_retries(
                 context=context,
                 attempt=attempt + 1,
                 max_attempts=retries + 1,
-                circuit_breaker_state=_github_circuit_breaker.state.value
+                circuit_breaker_state=_github_circuit_breaker.state.value,
             )
 
             # Use circuit breaker protection
@@ -187,7 +211,7 @@ def _request_with_retries(
                 context=context,
                 status_code=resp.status_code,
                 attempt=attempt + 1,
-                duration_ms=(time.time() - start_time) * 1000
+                duration_ms=(time.time() - start_time) * 1000,
             )
 
             # Record success metrics
@@ -195,7 +219,7 @@ def _request_with_retries(
                 operation="github_api_success",
                 duration_ms=(time.time() - start_time) * 1000,
                 status="success",
-                context=context
+                context=context,
             )
 
             return resp
@@ -205,13 +229,13 @@ def _request_with_retries(
                 "GitHub API request blocked by circuit breaker",
                 context=context,
                 circuit_breaker_state=_github_circuit_breaker.state.value,
-                error=str(exc)
+                error=str(exc),
             )
             record_operation_metrics(
                 operation="github_api_circuit_breaker_blocked",
                 duration_ms=(time.time() - start_time) * 1000,
                 status="circuit_breaker_open",
-                context=context
+                context=context,
             )
             raise
 
@@ -224,7 +248,7 @@ def _request_with_retries(
                 reset_time=exc.reset_time,
                 remaining=exc.remaining,
                 attempt=attempt + 1,
-                max_attempts=retries + 1
+                max_attempts=retries + 1,
             )
 
             # If this is the last attempt, don't sleep
@@ -246,7 +270,7 @@ def _request_with_retries(
                 delay_seconds=delay,
                 rate_limit_reset=exc.reset_time,
                 attempt=attempt + 1,
-                next_attempt=attempt + 2
+                next_attempt=attempt + 2,
             )
 
             time.sleep(delay)
@@ -261,7 +285,7 @@ def _request_with_retries(
                 error=str(exc),
                 error_type=type(exc).__name__,
                 attempt=attempt + 1,
-                max_attempts=retries + 1
+                max_attempts=retries + 1,
             )
 
             # Check if we should retry this error type
@@ -270,7 +294,7 @@ def _request_with_retries(
                     "Not retrying GitHub API request",
                     context=context,
                     error_type=type(exc).__name__,
-                    reason="error_type_not_retryable"
+                    reason="error_type_not_retryable",
                 )
                 break
 
@@ -285,7 +309,7 @@ def _request_with_retries(
                 context=context,
                 delay_seconds=delay,
                 attempt=attempt + 1,
-                next_attempt=attempt + 2
+                next_attempt=attempt + 2,
             )
 
             time.sleep(delay)
@@ -295,7 +319,11 @@ def _request_with_retries(
             error_type = type(exc).__name__
 
             # Enhanced error classification
-            status_code = getattr(exc.response, 'status_code', None) if hasattr(exc, 'response') else None
+            status_code = (
+                getattr(exc.response, "status_code", None)
+                if hasattr(exc, "response")
+                else None
+            )
 
             logger.warning(
                 "GitHub API request failed",
@@ -304,7 +332,7 @@ def _request_with_retries(
                 error_type=error_type,
                 status_code=status_code,
                 attempt=attempt + 1,
-                max_attempts=retries + 1
+                max_attempts=retries + 1,
             )
 
             # Check if we should retry this error type
@@ -314,7 +342,7 @@ def _request_with_retries(
                     context=context,
                     error_type=error_type,
                     status_code=status_code,
-                    reason="error_type_not_retryable"
+                    reason="error_type_not_retryable",
                 )
                 break
 
@@ -324,7 +352,7 @@ def _request_with_retries(
 
             # Calculate retry delay
             retry_after = None
-            if hasattr(exc, 'response') and exc.response:
+            if hasattr(exc, "response") and exc.response:
                 retry_after = _retry_strategy.extract_retry_after(exc.response)
 
             delay = _retry_strategy.calculate_delay(attempt, retry_after)
@@ -335,7 +363,7 @@ def _request_with_retries(
                 delay_seconds=delay,
                 retry_after_header=retry_after,
                 attempt=attempt + 1,
-                next_attempt=attempt + 2
+                next_attempt=attempt + 2,
             )
 
             time.sleep(delay)
@@ -346,14 +374,14 @@ def _request_with_retries(
         context=context,
         error=str(last_exception) if last_exception else "Unknown error",
         total_attempts=retries + 1,
-        circuit_breaker_state=_github_circuit_breaker.state.value
+        circuit_breaker_state=_github_circuit_breaker.state.value,
     )
 
     record_operation_metrics(
         operation="github_api_failure",
         duration_ms=(time.time() - start_time) * 1000,
         status="max_retries_exceeded",
-        context=context
+        context=context,
     )
 
     if last_exception:
@@ -370,17 +398,14 @@ def get_pull_request_diff(
     repo: str,
     pr_number: int,
     token: str | None = None,
-    context: RequestContext | None = None
+    context: RequestContext | None = None,
 ) -> str:
     """Return the diff for ``pr_number`` in ``repo``."""
     if context is None:
         context = RequestContext()
 
     logger.info(
-        "Fetching pull request diff",
-        context=context,
-        repo=repo,
-        pr_number=pr_number
+        "Fetching pull request diff", context=context, repo=repo, pr_number=pr_number
     )
 
     url = f"{get_github_api_url()}/repos/{repo}/pulls/{pr_number}"
@@ -397,7 +422,7 @@ def get_pull_request_diff(
         context=context,
         repo=repo,
         pr_number=pr_number,
-        diff_size=len(resp.text)
+        diff_size=len(resp.text),
     )
 
     return resp.text
@@ -408,7 +433,7 @@ def post_comment(
     pr_number: int,
     body: str,
     token: str | None = None,
-    context: RequestContext | None = None
+    context: RequestContext | None = None,
 ) -> Any:
     """Post ``body`` as a comment on the pull request with fallback for large comments."""
     if context is None:
@@ -419,7 +444,7 @@ def post_comment(
         context=context,
         repo=repo,
         pr_number=pr_number,
-        comment_length=len(body)
+        comment_length=len(body),
     )
 
     url = f"{get_github_api_url()}/repos/{repo}/issues/{pr_number}/comments"
@@ -440,14 +465,14 @@ def post_comment(
             context=context,
             repo=repo,
             pr_number=pr_number,
-            comment_id=result.get("id")
+            comment_id=result.get("id"),
         )
 
         record_operation_metrics(
             operation="github_comment_posted",
             duration_ms=0,
             status="success",
-            context=context
+            context=context,
         )
 
         return result
@@ -460,7 +485,7 @@ def post_comment(
                 context=context,
                 repo=repo,
                 pr_number=pr_number,
-                original_length=len(body)
+                original_length=len(body),
             )
 
             # Create a summarized version
@@ -483,14 +508,14 @@ def post_comment(
                     repo=repo,
                     pr_number=pr_number,
                     comment_id=result.get("id"),
-                    summary_length=len(summary_body)
+                    summary_length=len(summary_body),
                 )
 
                 record_operation_metrics(
                     operation="github_comment_posted",
                     duration_ms=0,
                     status="success_with_fallback",
-                    context=context
+                    context=context,
                 )
 
                 return result
@@ -501,14 +526,14 @@ def post_comment(
                     context=context,
                     repo=repo,
                     pr_number=pr_number,
-                    error=str(fallback_error)
+                    error=str(fallback_error),
                 )
 
                 record_operation_metrics(
                     operation="github_comment_posted",
                     duration_ms=0,
                     status="failure",
-                    context=context
+                    context=context,
                 )
                 raise
         else:
@@ -516,14 +541,14 @@ def post_comment(
                 operation="github_comment_posted",
                 duration_ms=0,
                 status="failure",
-                context=context
+                context=context,
             )
             raise
 
 
 def _create_comment_summary(full_body: str) -> str:
     """Create a summarized version of a comment that's too large."""
-    lines = full_body.split('\n')
+    lines = full_body.split("\n")
 
     # Keep header and first few lines of each section
     summary_lines = []
@@ -532,7 +557,7 @@ def _create_comment_summary(full_body: str) -> str:
     max_lines_per_section = 10
 
     for line in lines:
-        if line.startswith('##') or line.startswith('###'):
+        if line.startswith("##") or line.startswith("###"):
             # New section header
             current_section = line
             summary_lines.append(line)
@@ -544,11 +569,13 @@ def _create_comment_summary(full_body: str) -> str:
             summary_lines.append("... (content truncated due to size limits)")
             section_line_count += 1
 
-    summary = '\n'.join(summary_lines)
+    summary = "\n".join(summary_lines)
 
     # Add footer explaining truncation
-    summary += "\n\n---\n⚠️ **Note**: This comment was automatically truncated due to size limits. " \
-               "Run the analysis locally for complete details."
+    summary += (
+        "\n\n---\n⚠️ **Note**: This comment was automatically truncated due to size limits. "
+        "Run the analysis locally for complete details."
+    )
 
     return summary
 
@@ -581,7 +608,7 @@ def analyze_and_comment(
         context=context,
         repo_path=repo_path,
         repo=repo,
-        pr_number=pr_number
+        pr_number=pr_number,
     )
 
     from .pr_analysis import analyze_pr
@@ -598,7 +625,7 @@ def analyze_and_comment(
                 context=context,
                 repo=repo,
                 pr_number=pr_number,
-                diff_size=len(diff_content)
+                diff_size=len(diff_content),
             )
         except (GitHubError, GitHubConnectionError) as diff_error:
             logger.warning(
@@ -606,14 +633,14 @@ def analyze_and_comment(
                 context=context,
                 repo=repo,
                 pr_number=pr_number,
-                error=str(diff_error)
+                error=str(diff_error),
             )
 
             record_operation_metrics(
                 operation="github_diff_fetch_failure",
                 duration_ms=0,
                 status="failure",
-                context=context
+                context=context,
             )
 
         # Perform analysis (this should always be attempted)
@@ -625,7 +652,7 @@ def analyze_and_comment(
                 context=context,
                 security_tool=analysis_result.security.tool,
                 style_tool=analysis_result.style.tool,
-                performance_tool=analysis_result.performance.tool
+                performance_tool=analysis_result.performance.tool,
             )
 
         except Exception as analysis_error:
@@ -635,22 +662,29 @@ def analyze_and_comment(
                 repo=repo,
                 pr_number=pr_number,
                 error=str(analysis_error),
-                error_type=type(analysis_error).__name__
+                error_type=type(analysis_error).__name__,
             )
 
             record_operation_metrics(
                 operation="pr_analysis_failure",
                 duration_ms=0,
                 status="failure",
-                context=context
+                context=context,
             )
 
             # Create a fallback result to still post a comment
             from .models import AnalysisSection, PRAnalysisResult
+
             analysis_result = PRAnalysisResult(
-                security=AnalysisSection(tool="error", output=f"Analysis failed: {str(analysis_error)}"),
-                style=AnalysisSection(tool="error", output="Analysis not completed due to error"),
-                performance=AnalysisSection(tool="error", output="Analysis not completed due to error")
+                security=AnalysisSection(
+                    tool="error", output=f"Analysis failed: {str(analysis_error)}"
+                ),
+                style=AnalysisSection(
+                    tool="error", output="Analysis not completed due to error"
+                ),
+                performance=AnalysisSection(
+                    tool="error", output="Analysis not completed due to error"
+                ),
             )
 
         # Attempt to post comment with multiple fallback strategies
@@ -664,7 +698,7 @@ def analyze_and_comment(
                     context=context,
                     repo=repo,
                     pr_number=pr_number,
-                    comment_id=comment_result.get("id")
+                    comment_id=comment_result.get("id"),
                 )
 
             except RateLimitError as rate_error:
@@ -673,14 +707,14 @@ def analyze_and_comment(
                     context=context,
                     repo=repo,
                     pr_number=pr_number,
-                    reset_time=getattr(rate_error, 'reset_time', None)
+                    reset_time=getattr(rate_error, "reset_time", None),
                 )
 
                 record_operation_metrics(
                     operation="github_comment_rate_limited",
                     duration_ms=0,
                     status="rate_limited",
-                    context=context
+                    context=context,
                 )
                 raise
 
@@ -690,14 +724,14 @@ def analyze_and_comment(
                     context=context,
                     repo=repo,
                     pr_number=pr_number,
-                    error=str(conn_error)
+                    error=str(conn_error),
                 )
 
                 record_operation_metrics(
                     operation="github_comment_connection_error",
                     duration_ms=0,
                     status="connection_error",
-                    context=context
+                    context=context,
                 )
                 raise
 
@@ -708,30 +742,34 @@ def analyze_and_comment(
                     repo=repo,
                     pr_number=pr_number,
                     error=str(github_error),
-                    status_code=getattr(github_error, 'status_code', None)
+                    status_code=getattr(github_error, "status_code", None),
                 )
 
                 record_operation_metrics(
                     operation="github_comment_api_error",
                     duration_ms=0,
                     status="api_error",
-                    context=context
+                    context=context,
                 )
 
                 # Try a minimal fallback comment
                 try:
-                    minimal_body = f"## 🤖 AutoGen Code Review\n\n" \
-                                  f"Analysis completed but failed to post full results.\n" \
-                                  f"Error: {str(github_error)[:200]}..."
+                    minimal_body = (
+                        f"## 🤖 AutoGen Code Review\n\n"
+                        f"Analysis completed but failed to post full results.\n"
+                        f"Error: {str(github_error)[:200]}..."
+                    )
 
-                    comment_result = post_comment(repo, pr_number, minimal_body, token, context)
+                    comment_result = post_comment(
+                        repo, pr_number, minimal_body, token, context
+                    )
 
                     logger.info(
                         "Posted minimal fallback comment",
                         context=context,
                         repo=repo,
                         pr_number=pr_number,
-                        comment_id=comment_result.get("id")
+                        comment_id=comment_result.get("id"),
                     )
 
                 except Exception as minimal_error:
@@ -740,7 +778,7 @@ def analyze_and_comment(
                         context=context,
                         repo=repo,
                         pr_number=pr_number,
-                        error=str(minimal_error)
+                        error=str(minimal_error),
                     )
                     raise github_error  # Raise original error
 
@@ -750,14 +788,14 @@ def analyze_and_comment(
                 operation="analyze_and_comment_completed",
                 duration_ms=0,
                 status="success",
-                context=context
+                context=context,
             )
         else:
             record_operation_metrics(
                 operation="analyze_and_comment_completed",
                 duration_ms=0,
                 status="partial",
-                context=context
+                context=context,
             )
 
         return comment_result or {"status": "analysis_completed_no_comment"}
@@ -767,14 +805,14 @@ def analyze_and_comment(
             "Circuit breaker open, GitHub API unavailable",
             context=context,
             repo=repo,
-            pr_number=pr_number
+            pr_number=pr_number,
         )
 
         record_operation_metrics(
             operation="analyze_and_comment_circuit_breaker",
             duration_ms=0,
             status="circuit_breaker_open",
-            context=context
+            context=context,
         )
         raise
 
@@ -785,13 +823,13 @@ def analyze_and_comment(
             repo=repo,
             pr_number=pr_number,
             error=str(e),
-            error_type=type(e).__name__
+            error_type=type(e).__name__,
         )
 
         record_operation_metrics(
             operation="analyze_and_comment_error",
             duration_ms=0,
             status="error",
-            context=context
+            context=context,
         )
         raise

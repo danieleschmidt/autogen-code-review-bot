@@ -16,6 +16,7 @@ logger = get_logger(__name__)
 
 class ConfigError(Exception):
     """Base exception for configuration errors."""
+
     pass
 
 
@@ -40,8 +41,7 @@ class SchemaDefinition:
         for field_name, field_def in self.fields.items():
             if field_def.get("required", False) and field_name not in config:
                 raise ValidationError(
-                    f"Required field '{field_name}' is missing",
-                    field=field_name
+                    f"Required field '{field_name}' is missing", field=field_name
                 )
 
         # Validate each field in the config
@@ -54,7 +54,9 @@ class SchemaDefinition:
             field_def = self.fields[field_name]
             self._validate_field(field_name, value, field_def)
 
-    def _validate_field(self, field_name: str, value: Any, field_def: Dict[str, Any]) -> None:
+    def _validate_field(
+        self, field_name: str, value: Any, field_def: Dict[str, Any]
+    ) -> None:
         """Validate a single field against its definition."""
         # Type validation
         expected_type = field_def.get("type")
@@ -62,7 +64,7 @@ class SchemaDefinition:
             raise ValidationError(
                 f"Field '{field_name}' must be of type {expected_type.__name__}, got {type(value).__name__}",
                 field=field_name,
-                value=value
+                value=value,
             )
 
         # Numeric constraints
@@ -74,14 +76,14 @@ class SchemaDefinition:
                 raise ValidationError(
                     f"Field '{field_name}' must be >= {min_val}, got {value}",
                     field=field_name,
-                    value=value
+                    value=value,
                 )
 
             if max_val is not None and value > max_val:
                 raise ValidationError(
                     f"Field '{field_name}' must be <= {max_val}, got {value}",
                     field=field_name,
-                    value=value
+                    value=value,
                 )
 
         # String constraints
@@ -91,7 +93,7 @@ class SchemaDefinition:
                 raise ValidationError(
                     f"Field '{field_name}' does not match required pattern: {pattern}",
                     field=field_name,
-                    value=value
+                    value=value,
                 )
 
             allowed_values = field_def.get("allowed")
@@ -99,7 +101,7 @@ class SchemaDefinition:
                 raise ValidationError(
                     f"Field '{field_name}' must be one of {allowed_values}, got '{value}'",
                     field=field_name,
-                    value=value
+                    value=value,
                 )
 
             min_length = field_def.get("min_length")
@@ -107,7 +109,7 @@ class SchemaDefinition:
                 raise ValidationError(
                     f"Field '{field_name}' must be at least {min_length} characters long",
                     field=field_name,
-                    value=value
+                    value=value,
                 )
 
         # List constraints
@@ -119,115 +121,140 @@ class SchemaDefinition:
                         raise ValidationError(
                             f"Field '{field_name}[{i}]' must be of type {item_type.__name__}, got {type(item).__name__}",
                             field=f"{field_name}[{i}]",
-                            value=item
+                            value=item,
                         )
 
 
 # Define schemas for different configuration types
-LINTER_SCHEMA = SchemaDefinition({
-    "linters": {
-        "type": dict,
-        "required": False,
-        "description": "Mapping of programming languages to linter tools"
+LINTER_SCHEMA = SchemaDefinition(
+    {
+        "linters": {
+            "type": dict,
+            "required": False,
+            "description": "Mapping of programming languages to linter tools",
+        }
     }
-})
+)
 
-AGENT_SCHEMA = SchemaDefinition({
-    "agents": {
-        "type": dict,
-        "required": False,
-        "description": "Agent configurations for code review"
+AGENT_SCHEMA = SchemaDefinition(
+    {
+        "agents": {
+            "type": dict,
+            "required": False,
+            "description": "Agent configurations for code review",
+        }
     }
-})
+)
 
-COVERAGE_SCHEMA = SchemaDefinition({
-    "coverage": {
-        "type": dict,
-        "required": False,
-        "description": "Test coverage configuration"
+COVERAGE_SCHEMA = SchemaDefinition(
+    {
+        "coverage": {
+            "type": dict,
+            "required": False,
+            "description": "Test coverage configuration",
+        }
     }
-})
+)
 
-BOT_SCHEMA = SchemaDefinition({
-    "github": {
-        "type": dict,
-        "required": False,
-        "description": "GitHub integration configuration"
-    },
-    "review_criteria": {
-        "type": dict,
-        "required": False,
-        "description": "Code review criteria settings"
+BOT_SCHEMA = SchemaDefinition(
+    {
+        "github": {
+            "type": dict,
+            "required": False,
+            "description": "GitHub integration configuration",
+        },
+        "review_criteria": {
+            "type": dict,
+            "required": False,
+            "description": "Code review criteria settings",
+        },
     }
-})
+)
 
 # Define nested schemas for complex structures
-AGENT_DETAIL_SCHEMA = SchemaDefinition({
-    "model": {
-        "type": str,
-        "required": True,
-        "description": "Language model to use (e.g., 'gpt-4', 'claude-3')"
-    },
-    "temperature": {
-        "type": (int, float),
-        "required": False,
-        "min": 0.0,
-        "max": 1.0,
-        "description": "Model temperature for response randomness (0.0-1.0)"
-    },
-    "focus_areas": {
-        "type": list,
-        "required": False,
-        "item_type": str,
-        "description": "List of areas for the agent to focus on"
+AGENT_DETAIL_SCHEMA = SchemaDefinition(
+    {
+        "model": {
+            "type": str,
+            "required": True,
+            "description": "Language model to use (e.g., 'gpt-4', 'claude-3')",
+        },
+        "temperature": {
+            "type": (int, float),
+            "required": False,
+            "min": 0.0,
+            "max": 1.0,
+            "description": "Model temperature for response randomness (0.0-1.0)",
+        },
+        "focus_areas": {
+            "type": list,
+            "required": False,
+            "item_type": str,
+            "description": "List of areas for the agent to focus on",
+        },
     }
-})
+)
 
-COVERAGE_DETAIL_SCHEMA = SchemaDefinition({
-    "target_threshold": {
-        "type": (int, float),
-        "required": False,
-        "min": 0.0,
-        "max": 100.0,
-        "description": "Target coverage percentage (0-100)"
-    },
-    "report_format": {
-        "type": str,
-        "required": False,
-        "allowed": ["html", "json", "text", "xml"],
-        "description": "Format for coverage reports"
-    },
-    "exclude_patterns": {
-        "type": list,
-        "required": False,
-        "item_type": str,
-        "description": "Glob patterns for files to exclude from coverage"
+COVERAGE_DETAIL_SCHEMA = SchemaDefinition(
+    {
+        "target_threshold": {
+            "type": (int, float),
+            "required": False,
+            "min": 0.0,
+            "max": 100.0,
+            "description": "Target coverage percentage (0-100)",
+        },
+        "report_format": {
+            "type": str,
+            "required": False,
+            "allowed": ["html", "json", "text", "xml"],
+            "description": "Format for coverage reports",
+        },
+        "exclude_patterns": {
+            "type": list,
+            "required": False,
+            "item_type": str,
+            "description": "Glob patterns for files to exclude from coverage",
+        },
     }
-})
+)
 
-GITHUB_DETAIL_SCHEMA = SchemaDefinition({
-    "webhook_secret": {
-        "type": str,
-        "required": False,
-        "min_length": 1,
-        "description": "Secret for validating GitHub webhook requests"
-    },
-    "bot_token": {
-        "type": str,
-        "required": False,
-        "min_length": 1,
-        "description": "GitHub personal access token for API access"
+GITHUB_DETAIL_SCHEMA = SchemaDefinition(
+    {
+        "webhook_secret": {
+            "type": str,
+            "required": False,
+            "min_length": 1,
+            "description": "Secret for validating GitHub webhook requests",
+        },
+        "bot_token": {
+            "type": str,
+            "required": False,
+            "min_length": 1,
+            "description": "GitHub personal access token for API access",
+        },
     }
-})
+)
 
 # Known valid linter tools
 ALLOWED_LINTER_TOOLS: Set[str] = {
-    "ruff", "flake8", "pylint", "black", "isort",  # Python
-    "eslint", "prettier", "jshint",  # JavaScript/TypeScript
-    "golangci-lint", "gofmt", "staticcheck",  # Go
-    "rubocop", "reek",  # Ruby
-    "rustfmt", "clippy",  # Rust
-    "clang-format", "cpplint",  # C/C++
+    "ruff",
+    "flake8",
+    "pylint",
+    "black",
+    "isort",  # Python
+    "eslint",
+    "prettier",
+    "jshint",  # JavaScript/TypeScript
+    "golangci-lint",
+    "gofmt",
+    "staticcheck",  # Go
+    "rubocop",
+    "reek",  # Ruby
+    "rustfmt",
+    "clippy",  # Rust
+    "clang-format",
+    "cpplint",  # C/C++
     "shellcheck",  # Shell
     "hadolint",  # Dockerfile
 }
@@ -242,7 +269,7 @@ def validate_linter_config(config: Dict[str, Any]) -> None:
         raise ValidationError(
             "Field 'linters' must be a dictionary mapping languages to tools",
             field="linters",
-            value=linters
+            value=linters,
         )
 
     for language, tool in linters.items():
@@ -250,14 +277,14 @@ def validate_linter_config(config: Dict[str, Any]) -> None:
             raise ValidationError(
                 f"Language name must be a string, got {type(language).__name__}",
                 field=f"linters.{language}",
-                value=language
+                value=language,
             )
 
         if not isinstance(tool, str):
             raise ValidationError(
                 f"Linter tool for '{language}' must be a string, got {type(tool).__name__}",
                 field=f"linters.{language}",
-                value=tool
+                value=tool,
             )
 
         if tool not in ALLOWED_LINTER_TOOLS:
@@ -265,7 +292,7 @@ def validate_linter_config(config: Dict[str, Any]) -> None:
                 f"Unknown linter tool '{tool}' for language '{language}'. "
                 f"Allowed tools: {', '.join(sorted(ALLOWED_LINTER_TOOLS))}",
                 field=f"linters.{language}",
-                value=tool
+                value=tool,
             )
 
 
@@ -278,7 +305,7 @@ def validate_agent_config(config: Dict[str, Any]) -> None:
         raise ValidationError(
             "Field 'agents' must be a dictionary of agent configurations",
             field="agents",
-            value=agents
+            value=agents,
         )
 
     for agent_name, agent_config in agents.items():
@@ -286,7 +313,7 @@ def validate_agent_config(config: Dict[str, Any]) -> None:
             raise ValidationError(
                 f"Agent '{agent_name}' configuration must be a dictionary",
                 field=f"agents.{agent_name}",
-                value=agent_config
+                value=agent_config,
             )
 
         try:
@@ -295,8 +322,12 @@ def validate_agent_config(config: Dict[str, Any]) -> None:
             # Re-raise with more specific field path
             raise ValidationError(
                 f"Agent '{agent_name}': {e}",
-                field=f"agents.{agent_name}.{e.field}" if e.field else f"agents.{agent_name}",
-                value=e.value
+                field=(
+                    f"agents.{agent_name}.{e.field}"
+                    if e.field
+                    else f"agents.{agent_name}"
+                ),
+                value=e.value,
             )
 
 
@@ -309,7 +340,7 @@ def validate_coverage_config(config: Dict[str, Any]) -> None:
         raise ValidationError(
             "Field 'coverage' must be a dictionary of coverage settings",
             field="coverage",
-            value=coverage
+            value=coverage,
         )
 
     if coverage:  # Only validate if coverage section exists
@@ -320,7 +351,7 @@ def validate_coverage_config(config: Dict[str, Any]) -> None:
             raise ValidationError(
                 f"Coverage configuration: {e}",
                 field=f"coverage.{e.field}" if e.field else "coverage",
-                value=e.value
+                value=e.value,
             )
 
 
@@ -335,7 +366,7 @@ def validate_bot_config(config: Dict[str, Any]) -> None:
             raise ValidationError(
                 "Field 'github' must be a dictionary of GitHub settings",
                 field="github",
-                value=github
+                value=github,
             )
 
         try:
@@ -344,7 +375,7 @@ def validate_bot_config(config: Dict[str, Any]) -> None:
             raise ValidationError(
                 f"GitHub configuration: {e}",
                 field=f"github.{e.field}" if e.field else "github",
-                value=e.value
+                value=e.value,
             )
 
         # Additional validation for GitHub fields
@@ -353,7 +384,7 @@ def validate_bot_config(config: Dict[str, Any]) -> None:
             raise ValidationError(
                 "GitHub webhook_secret cannot be empty",
                 field="github.webhook_secret",
-                value=webhook_secret
+                value=webhook_secret,
             )
 
     # Validate review criteria if present
@@ -363,7 +394,7 @@ def validate_bot_config(config: Dict[str, Any]) -> None:
             raise ValidationError(
                 "Field 'review_criteria' must be a dictionary",
                 field="review_criteria",
-                value=review_criteria
+                value=review_criteria,
             )
 
         # Validate boolean flags
@@ -372,7 +403,7 @@ def validate_bot_config(config: Dict[str, Any]) -> None:
                 raise ValidationError(
                     f"Review criteria '{key}' must be true or false, got {type(value).__name__}",
                     field=f"review_criteria.{key}",
-                    value=value
+                    value=value,
                 )
 
 
@@ -384,7 +415,7 @@ class ConfigValidator:
             "linter": validate_linter_config,
             "agent": validate_agent_config,
             "coverage": validate_coverage_config,
-            "bot": validate_bot_config
+            "bot": validate_bot_config,
         }
 
     def validate_file(self, file_path: str, config_type: str) -> Dict[str, Any]:
@@ -395,7 +426,7 @@ class ConfigValidator:
             raise ConfigError(f"Configuration file not found: {file_path}")
 
         try:
-            with open(path, encoding='utf-8') as f:
+            with open(path, encoding="utf-8") as f:
                 config = yaml.safe_load(f) or {}
         except yaml.YAMLError as e:
             raise ConfigError(f"Malformed YAML in configuration file {file_path}: {e}")
@@ -441,10 +472,10 @@ class ConfigValidator:
                     "linters": {
                         "python": "ruff",
                         "javascript": "eslint",
-                        "typescript": "eslint"
+                        "typescript": "eslint",
                     }
                 },
-                "allowed_tools": sorted(ALLOWED_LINTER_TOOLS)
+                "allowed_tools": sorted(ALLOWED_LINTER_TOOLS),
             },
             "agent": {
                 "description": "Configures AI agents for code review",
@@ -453,15 +484,15 @@ class ConfigValidator:
                         "coder": {
                             "model": "gpt-4",
                             "temperature": 0.3,
-                            "focus_areas": ["functionality", "bugs"]
+                            "focus_areas": ["functionality", "bugs"],
                         },
                         "reviewer": {
                             "model": "gpt-4",
                             "temperature": 0.1,
-                            "focus_areas": ["security", "performance"]
-                        }
+                            "focus_areas": ["security", "performance"],
+                        },
                     }
-                }
+                },
             },
             "coverage": {
                 "description": "Configures test coverage requirements and reporting",
@@ -469,24 +500,24 @@ class ConfigValidator:
                     "coverage": {
                         "target_threshold": 85.0,
                         "report_format": "html",
-                        "exclude_patterns": ["*/tests/*", "*/migrations/*"]
+                        "exclude_patterns": ["*/tests/*", "*/migrations/*"],
                     }
-                }
+                },
             },
             "bot": {
                 "description": "Main bot configuration including GitHub integration",
                 "example": {
                     "github": {
                         "webhook_secret": "your_webhook_secret",
-                        "bot_token": "your_github_token"
+                        "bot_token": "your_github_token",
                     },
                     "review_criteria": {
                         "security_scan": True,
                         "performance_check": True,
-                        "test_coverage": True
-                    }
-                }
-            }
+                        "test_coverage": True,
+                    },
+                },
+            },
         }
 
 
@@ -525,5 +556,7 @@ def get_config_help(config_type: Optional[str] = None) -> str:
         help_text = "Available configuration types:\n\n"
         for name, info in summary.items():
             help_text += f"- {name}: {info['description']}\n"
-        help_text += "\nUse get_config_help('<type>') for detailed help on a specific type."
+        help_text += (
+            "\nUse get_config_help('<type>') for detailed help on a specific type."
+        )
         return help_text
