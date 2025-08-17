@@ -17,7 +17,7 @@ from .language_detection import detect_language
 from .linter_config import LinterConfig
 from .logging_config import get_logger
 from .metrics import get_metrics_registry
-from .models import PRAnalysisResult
+from .models import AnalysisSection, PRAnalysisResult
 from .robust_analysis_helpers import (
     is_ignored_path,
     run_performance_analysis,
@@ -28,6 +28,20 @@ from .robust_error_handling import ErrorSeverity, robust_operation, validate_fil
 
 logger = get_logger(__name__)
 metrics = get_metrics_registry()
+
+
+def _run_timed_check(check_name: str, func, *args, **kwargs):
+    """Run a function with timing metrics."""
+    start_time = datetime.now(timezone.utc)
+    try:
+        result = func(*args, **kwargs)
+        duration = (datetime.now(timezone.utc) - start_time).total_seconds()
+        metrics.histogram("check_duration_seconds").observe(duration, {"check": check_name})
+        return result
+    except Exception as e:
+        duration = (datetime.now(timezone.utc) - start_time).total_seconds()
+        metrics.histogram("check_duration_seconds").observe(duration, {"check": check_name, "error": "true"})
+        raise e
 
 
 @robust_operation(
