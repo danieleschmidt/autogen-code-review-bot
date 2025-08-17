@@ -102,11 +102,25 @@ class EnterpriseMonitor:
         self.performance_metrics: List[PerformanceMetric] = []
         self.alert_handlers: List[callable] = []
 
+        # Enhanced monitoring features
+        self.sli_targets: Dict[str, float] = {
+            "availability": 99.9,
+            "latency_p95": 200.0,  # ms
+            "error_rate": 0.1,      # %
+            "throughput": 1000.0    # req/s
+        }
+        self.slo_budgets: Dict[str, float] = {}
+        self.incident_count = 0
+        self.mttr_history: List[float] = []
+        
         # Initialize Prometheus metrics
         self._setup_prometheus_metrics()
 
         # Initialize distributed tracing
         self._setup_distributed_tracing()
+
+        # Initialize SLI/SLO monitoring
+        self._initialize_slo_monitoring()
 
         # Start monitoring loops
         self._monitoring_tasks = []
@@ -208,6 +222,22 @@ class EnterpriseMonitor:
         except Exception as e:
             logger.warning("Failed to initialize distributed tracing", error=str(e))
             self.tracer = None
+
+    def _initialize_slo_monitoring(self):
+        """Initialize SLI/SLO monitoring"""
+        # Initialize error budgets (monthly)
+        monthly_minutes = 30 * 24 * 60  # 43,200 minutes per month
+        
+        for sli_name, target in self.sli_targets.items():
+            if sli_name == "availability":
+                # Calculate error budget in minutes
+                allowed_downtime = monthly_minutes * (1 - target / 100)
+                self.slo_budgets[sli_name] = allowed_downtime
+            else:
+                # For other SLIs, budget is percentage of requests that can fail target
+                self.slo_budgets[sli_name] = 100 - target
+        
+        logger.info("SLI/SLO monitoring initialized", targets=self.sli_targets)
 
     async def start_monitoring(self):
         """Start all monitoring tasks"""

@@ -1,0 +1,480 @@
+---
+# Global-First Deployment Configuration
+# Multi-region, compliance-ready, enterprise-grade deployment
+
+global_deployment:
+  name: "autogen-code-review-bot-global"
+  version: "2.0.0"
+  deployment_strategy: "blue_green"
+  
+  # Global regions configuration
+  regions:
+    us-east-1:
+      primary: true
+      data_residency: "US"
+      compliance: ["SOX", "CCPA", "GDPR"]
+      availability_zone: ["us-east-1a", "us-east-1b", "us-east-1c"]
+      capacity:
+        min_instances: 3
+        max_instances: 50
+        auto_scaling: true
+    
+    us-west-2:
+      primary: false
+      data_residency: "US"
+      compliance: ["CCPA", "GDPR"]
+      availability_zone: ["us-west-2a", "us-west-2b"]
+      capacity:
+        min_instances: 2
+        max_instances: 30
+        auto_scaling: true
+    
+    eu-west-1:
+      primary: false
+      data_residency: "EU"
+      compliance: ["GDPR", "DPA"]
+      availability_zone: ["eu-west-1a", "eu-west-1b", "eu-west-1c"]
+      capacity:
+        min_instances: 2
+        max_instances: 25
+        auto_scaling: true
+        
+    ap-southeast-1:
+      primary: false
+      data_residency: "APAC"
+      compliance: ["PDPA", "GDPR"]
+      availability_zone: ["ap-southeast-1a", "ap-southeast-1b"]
+      capacity:
+        min_instances: 1
+        max_instances: 20
+        auto_scaling: true
+
+  # Traffic routing and load balancing
+  traffic_management:
+    global_load_balancer:
+      type: "geographic"
+      health_check_interval: "30s"
+      failover_time: "60s"
+      sticky_sessions: false
+      
+    routing_rules:
+      - source_region: "us"
+        target_region: "us-east-1"
+        fallback: "us-west-2"
+      - source_region: "eu"
+        target_region: "eu-west-1"
+        fallback: "us-east-1"
+      - source_region: "apac"
+        target_region: "ap-southeast-1"
+        fallback: "us-west-2"
+
+  # Data replication and synchronization
+  data_strategy:
+    primary_region: "us-east-1"
+    replication_mode: "async"
+    backup_regions: ["us-west-2", "eu-west-1"]
+    
+    databases:
+      postgres:
+        replication: "master_slave"
+        backup_frequency: "hourly"
+        retention: "30_days"
+        encryption: "AES-256"
+        
+      redis:
+        clustering: true
+        persistence: true
+        backup_frequency: "6_hours"
+        
+    storage:
+      type: "distributed"
+      encryption: "client_side"
+      versioning: true
+      lifecycle_management: true
+
+  # Security and compliance
+  security:
+    encryption:
+      in_transit: "TLS_1.3"
+      at_rest: "AES-256"
+      key_management: "HSM"
+      
+    authentication:
+      multi_factor: true
+      sso_integration: true
+      session_timeout: "8_hours"
+      
+    network_security:
+      vpc_isolation: true
+      private_subnets: true
+      nat_gateways: true
+      security_groups: "restrictive"
+      waf_enabled: true
+      ddos_protection: true
+      
+    compliance_monitoring:
+      automated_auditing: true
+      compliance_reports: "monthly"
+      vulnerability_scanning: "continuous"
+      penetration_testing: "quarterly"
+
+  # Monitoring and observability
+  observability:
+    metrics:
+      collection_interval: "15s"
+      retention: "90_days"
+      high_availability: true
+      
+    logging:
+      centralized: true
+      structured: true
+      retention: "1_year"
+      real_time_analysis: true
+      
+    tracing:
+      distributed_tracing: true
+      sampling_rate: "10%"
+      trace_retention: "7_days"
+      
+    alerting:
+      channels: ["email", "slack", "pagerduty", "sms"]
+      escalation_policy: true
+      alert_correlation: true
+
+  # Disaster recovery
+  disaster_recovery:
+    rpo: "15_minutes"  # Recovery Point Objective
+    rto: "5_minutes"   # Recovery Time Objective
+    
+    backup_strategy:
+      frequency: "continuous"
+      geographic_distribution: true
+      automated_testing: "weekly"
+      
+    failover:
+      automatic: true
+      health_check_failures: 3
+      failover_time: "60s"
+      rollback_capability: true
+
+  # Performance requirements
+  performance:
+    sla:
+      availability: "99.99%"
+      response_time_p95: "200ms"
+      throughput: "10000_rps"
+      error_rate: "< 0.01%"
+      
+    auto_scaling:
+      metrics: ["cpu", "memory", "response_time", "queue_depth"]
+      scale_up_threshold: "70%"
+      scale_down_threshold: "30%"
+      cooldown_period: "300s"
+
+  # Cost optimization
+  cost_management:
+    resource_optimization: true
+    spot_instances: "non_critical_workloads"
+    scheduled_scaling: true
+    unused_resource_cleanup: true
+    
+    budget_alerts:
+      monthly_threshold: "$10000"
+      daily_threshold: "$500"
+      spike_detection: true
+
+---
+# Kubernetes deployment manifests
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: autogen-global
+  labels:
+    app: autogen-code-review-bot
+    environment: production
+    compliance: gdpr-ready
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: autogen-api
+  namespace: autogen-global
+  labels:
+    app: autogen-api
+    version: v2.0.0
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: autogen-api
+  template:
+    metadata:
+      labels:
+        app: autogen-api
+        version: v2.0.0
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+      - name: autogen-api
+        image: autogen-code-review-bot:v2.0.0
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+          name: http
+        - containerPort: 9090
+          name: metrics
+        env:
+        - name: ENVIRONMENT
+          value: "production"
+        - name: REGION
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.annotations['topology.kubernetes.io/region']
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: autogen-secrets
+              key: redis-url
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: autogen-secrets
+              key: database-url
+        - name: GITHUB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: autogen-secrets
+              key: github-token
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: autogen-api-service
+  namespace: autogen-global
+  labels:
+    app: autogen-api
+spec:
+  selector:
+    app: autogen-api
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8080
+    protocol: TCP
+  - name: metrics
+    port: 9090
+    targetPort: 9090
+    protocol: TCP
+  type: ClusterIP
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: autogen-ingress
+  namespace: autogen-global
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/rate-limit: "1000"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+spec:
+  tls:
+  - hosts:
+    - api.autogen-bot.com
+    - "*.autogen-bot.com"
+    secretName: autogen-tls
+  rules:
+  - host: api.autogen-bot.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: autogen-api-service
+            port:
+              number: 80
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: autogen-api-hpa
+  namespace: autogen-global
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: autogen-api
+  minReplicas: 3
+  maxReplicas: 50
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 15
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: autogen-api-pdb
+  namespace: autogen-global
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: autogen-api
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: autogen-config
+  namespace: autogen-global
+data:
+  app_config.yml: |
+    global:
+      region: ${REGION}
+      environment: production
+      log_level: INFO
+    
+    performance:
+      max_concurrent_analyses: 50
+      cache_ttl: 3600
+      request_timeout: 300
+    
+    security:
+      rate_limiting:
+        enabled: true
+        requests_per_minute: 1000
+      
+    compliance:
+      data_retention_days: 2555  # 7 years
+      audit_logging: true
+      gdpr_compliance: true
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: autogen-secrets
+  namespace: autogen-global
+type: Opaque
+data:
+  # Note: In production, these would be managed by external secret management
+  redis-url: "cmVkaXM6Ly9yZWRpcy1jbHVzdGVyOjYzNzk="  # redis://redis-cluster:6379
+  database-url: "cG9zdGdyZXNxbDovL3Bvc3RncmVzOnNlY3VyZXBhc3NAbGF"  # base64 encoded
+  github-token: "Z2hwX3NlY3VyZXRva2VuaGVyZQ=="  # base64 encoded
+
+---
+# Network Policies for security
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: autogen-network-policy
+  namespace: autogen-global
+spec:
+  podSelector:
+    matchLabels:
+      app: autogen-api
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: nginx-ingress
+    - podSelector:
+        matchLabels:
+          app: prometheus
+    ports:
+    - protocol: TCP
+      port: 8080
+    - protocol: TCP
+      port: 9090
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          app: redis
+    ports:
+    - protocol: TCP
+      port: 6379
+  - to:
+    - podSelector:
+        matchLabels:
+          app: postgres
+    ports:
+    - protocol: TCP
+      port: 5432
+  - to: []  # Allow egress to external services (GitHub API, etc.)
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 80
