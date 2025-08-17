@@ -580,12 +580,42 @@ class AutonomousSDLC:
         return gate_results
 
     async def _execute_quality_gate_command(self, repo_path: str, command: str) -> Dict:
-        """Execute command-based quality gate"""
-        # TODO: Implement command execution with proper security
-        return {
-            "status": "passed",
-            "message": f"Command '{command}' executed successfully",
-        }
+        """Execute command-based quality gate with security"""
+        import subprocess
+        import shlex
+        from pathlib import Path
+        
+        try:
+            # Secure command execution
+            safe_command = shlex.split(command)
+            result = subprocess.run(
+                safe_command,
+                cwd=repo_path,
+                capture_output=True,
+                text=True,
+                timeout=300,  # 5 minute timeout
+                check=False
+            )
+            
+            return {
+                "status": "passed" if result.returncode == 0 else "failed",
+                "message": f"Command '{command}' executed",
+                "returncode": result.returncode,
+                "stdout": result.stdout[:1000],  # Limit output
+                "stderr": result.stderr[:1000],
+            }
+        except subprocess.TimeoutExpired:
+            return {
+                "status": "failed",
+                "message": f"Command '{command}' timed out",
+                "error": "timeout"
+            }
+        except Exception as e:
+            return {
+                "status": "failed", 
+                "message": f"Command '{command}' failed",
+                "error": str(e)
+            }
 
     async def _execute_builtin_quality_gate(
         self, repo_path: str, gate_name: str, mode: str
