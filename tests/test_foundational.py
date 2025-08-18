@@ -12,6 +12,7 @@ from unittest.mock import Mock, patch
 from autogen_code_review_bot.pr_analysis import analyze_pr
 from autogen_code_review_bot.models import PRAnalysisResult, AnalysisSection
 from autogen_code_review_bot.language_detection import detect_language
+from autogen_code_review_bot.exceptions import AnalysisError
 
 
 class TestBasicFunctionality:
@@ -101,10 +102,9 @@ class TestErrorHandling:
 
     def test_analyze_pr_nonexistent_path(self):
         """Test analyze_pr with non-existent path."""
-        # The current implementation returns mock data for any path
-        # This test validates the system handles invalid paths gracefully
-        result = analyze_pr("/nonexistent/path")
-        assert isinstance(result, PRAnalysisResult)
+        # Should raise an exception for non-existent paths
+        with pytest.raises(AnalysisError):
+            analyze_pr("/nonexistent/path")
 
     def test_analyze_pr_empty_directory(self, temp_dir):
         """Test analyze_pr with empty directory."""
