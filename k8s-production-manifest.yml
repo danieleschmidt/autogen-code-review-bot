@@ -1,0 +1,572 @@
+# Kubernetes Production Deployment Manifest for Autonomous SDLC
+# Enterprise-grade Kubernetes deployment with high availability, monitoring, and auto-scaling
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: autonomous-sdlc
+  labels:
+    app: autonomous-sdlc
+    environment: production
+    version: v1.0.0
+
+---
+# ConfigMap for application configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: autonomous-sdlc-config
+  namespace: autonomous-sdlc
+data:
+  production.yml: |
+    environment: production
+    log_level: INFO
+    optimization_level: maximum
+    cache_size: 10000
+    worker_threads: 20
+    max_parallel_tasks: 50
+    prometheus_enabled: true
+    jaeger_enabled: true
+    enable_api_key_auth: true
+    enable_rate_limiting: true
+    rate_limit_requests_per_minute: 1000
+  
+  agents.yml: |
+    agents:
+      coder:
+        model: "gpt-4"
+        temperature: 0.3
+        focus_areas: ["functionality", "bugs", "edge_cases"]
+      reviewer:
+        model: "gpt-4"
+        temperature: 0.1
+        focus_areas: ["security", "performance", "standards"]
+
+---
+# Secret for sensitive configuration
+apiVersion: v1
+kind: Secret
+metadata:
+  name: autonomous-sdlc-secrets
+  namespace: autonomous-sdlc
+type: Opaque
+data:
+  postgres-password: <base64-encoded-password>
+  redis-password: <base64-encoded-password>
+  api-key: <base64-encoded-api-key>
+  github-token: <base64-encoded-github-token>
+
+---
+# PostgreSQL StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: autonomous-sdlc
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      securityContext:
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+      containers:
+      - name: postgres
+        image: postgres:15-alpine
+        env:
+        - name: POSTGRES_DB
+          value: autonomous_sdlc
+        - name: POSTGRES_USER
+          value: sdlc_user
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: autonomous-sdlc-secrets
+              key: postgres-password
+        ports:
+        - containerPort: 5432
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /var/lib/postgresql/data
+        resources:
+          limits:
+            cpu: "1"
+            memory: "2Gi"
+          requests:
+            cpu: "250m"
+            memory: "256Mi"
+        livenessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - sdlc_user
+            - -d
+            - autonomous_sdlc
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - sdlc_user
+            - -d
+            - autonomous_sdlc
+          initialDelaySeconds: 5
+          periodSeconds: 5
+  volumeClaimTemplates:
+  - metadata:
+      name: postgres-storage
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 20Gi
+      storageClassName: fast-ssd
+
+---
+# Redis Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: autonomous-sdlc
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      securityContext:
+        runAsUser: 999
+        runAsGroup: 999
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        command:
+        - redis-server
+        - --appendonly
+        - "yes"
+        - --maxmemory
+        - 1gb
+        - --maxmemory-policy
+        - allkeys-lru
+        ports:
+        - containerPort: 6379
+        volumeMounts:
+        - name: redis-storage
+          mountPath: /data
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "1Gi"
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+        livenessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: redis-storage
+        persistentVolumeClaim:
+          claimName: redis-pvc
+
+---
+# Autonomous SDLC Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: autonomous-sdlc
+  namespace: autonomous-sdlc
+  labels:
+    app: autonomous-sdlc
+    version: v1.0.0
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: autonomous-sdlc
+  template:
+    metadata:
+      labels:
+        app: autonomous-sdlc
+        version: v1.0.0
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: "/metrics"
+    spec:
+      securityContext:
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+        runAsNonRoot: true
+      containers:
+      - name: autonomous-sdlc
+        image: terragonlabs/autonomous-sdlc:v1.0.0
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080
+          name: http
+          protocol: TCP
+        - containerPort: 9090
+          name: metrics
+          protocol: TCP
+        env:
+        - name: SDLC_ENVIRONMENT
+          value: "production"
+        - name: POSTGRES_HOST
+          value: "postgres"
+        - name: POSTGRES_PORT
+          value: "5432"
+        - name: POSTGRES_DB
+          value: "autonomous_sdlc"
+        - name: POSTGRES_USER
+          value: "sdlc_user"
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: autonomous-sdlc-secrets
+              key: postgres-password
+        - name: REDIS_HOST
+          value: "redis"
+        - name: REDIS_PORT
+          value: "6379"
+        volumeMounts:
+        - name: config-volume
+          mountPath: /app/config
+          readOnly: true
+        - name: tmp-volume
+          mountPath: /tmp
+        - name: var-tmp-volume
+          mountPath: /var/tmp
+        resources:
+          limits:
+            cpu: "2"
+            memory: "4Gi"
+          requests:
+            cpu: "500m"
+            memory: "1Gi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+      volumes:
+      - name: config-volume
+        configMap:
+          name: autonomous-sdlc-config
+      - name: tmp-volume
+        emptyDir:
+          sizeLimit: 100Mi
+      - name: var-tmp-volume
+        emptyDir:
+          sizeLimit: 50Mi
+
+---
+# Horizontal Pod Autoscaler
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: autonomous-sdlc-hpa
+  namespace: autonomous-sdlc
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: autonomous-sdlc
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 10
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 25
+        periodSeconds: 30
+
+---
+# Services
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: autonomous-sdlc
+spec:
+  selector:
+    app: postgres
+  ports:
+  - port: 5432
+    targetPort: 5432
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: autonomous-sdlc
+spec:
+  selector:
+    app: redis
+  ports:
+  - port: 6379
+    targetPort: 6379
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: autonomous-sdlc
+  namespace: autonomous-sdlc
+  labels:
+    app: autonomous-sdlc
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9090"
+spec:
+  selector:
+    app: autonomous-sdlc
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
+  - name: metrics
+    port: 9090
+    targetPort: 9090
+    protocol: TCP
+  type: ClusterIP
+
+---
+# Ingress with TLS
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: autonomous-sdlc-ingress
+  namespace: autonomous-sdlc
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+spec:
+  tls:
+  - hosts:
+    - api.autonomous-sdlc.terragonlabs.com
+    secretName: autonomous-sdlc-tls
+  rules:
+  - host: api.autonomous-sdlc.terragonlabs.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: autonomous-sdlc
+            port:
+              number: 8080
+
+---
+# PersistentVolumeClaim for Redis
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-pvc
+  namespace: autonomous-sdlc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: fast-ssd
+
+---
+# Network Policies for Security
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: autonomous-sdlc-netpol
+  namespace: autonomous-sdlc
+spec:
+  podSelector:
+    matchLabels:
+      app: autonomous-sdlc
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 8080
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 9090
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          app: postgres
+    ports:
+    - protocol: TCP
+      port: 5432
+  - to:
+    - podSelector:
+        matchLabels:
+          app: redis
+    ports:
+    - protocol: TCP
+      port: 6379
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53
+
+---
+# ServiceMonitor for Prometheus
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: autonomous-sdlc-metrics
+  namespace: autonomous-sdlc
+  labels:
+    app: autonomous-sdlc
+spec:
+  selector:
+    matchLabels:
+      app: autonomous-sdlc
+  endpoints:
+  - port: metrics
+    interval: 30s
+    path: /metrics
+
+---
+# Pod Disruption Budget
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: autonomous-sdlc-pdb
+  namespace: autonomous-sdlc
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: autonomous-sdlc
+
+---
+# RBAC Configuration
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: autonomous-sdlc-sa
+  namespace: autonomous-sdlc
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: autonomous-sdlc-role
+  namespace: autonomous-sdlc
+rules:
+- apiGroups: [""]
+  resources: ["pods", "services"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  verbs: ["get", "list", "watch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: autonomous-sdlc-rolebinding
+  namespace: autonomous-sdlc
+subjects:
+- kind: ServiceAccount
+  name: autonomous-sdlc-sa
+  namespace: autonomous-sdlc
+roleRef:
+  kind: Role
+  name: autonomous-sdlc-role
+  apiGroup: rbac.authorization.k8s.io

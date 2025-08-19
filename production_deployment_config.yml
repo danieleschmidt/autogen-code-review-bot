@@ -1,0 +1,513 @@
+# Production Deployment Configuration for Autonomous SDLC
+# Complete enterprise-grade deployment configuration with scaling and monitoring
+
+version: '3.8'
+
+services:
+  # Main Autonomous SDLC Service
+  autonomous-sdlc:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    image: terragonlabs/autonomous-sdlc:${VERSION:-latest}
+    container_name: autonomous-sdlc-main
+    restart: unless-stopped
+    
+    # Security Configuration
+    user: "1001:1001"
+    read_only: true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+    
+    # Resource Limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+      replicas: 3
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+    
+    # Health Monitoring
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8080/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    environment:
+      # Application Configuration
+      SDLC_ENVIRONMENT: production
+      SDLC_LOG_LEVEL: INFO
+      SDLC_OPTIMIZATION_LEVEL: maximum
+      SDLC_CACHE_SIZE: 10000
+      SDLC_WORKER_THREADS: 20
+      SDLC_MAX_PARALLEL_TASKS: 50
+      
+      # Monitoring Configuration
+      PROMETHEUS_ENABLED: "true"
+      PROMETHEUS_PORT: 9090
+      JAEGER_ENABLED: "true"
+      JAEGER_ENDPOINT: "http://jaeger:14268/api/traces"
+      
+      # Database Configuration
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: autonomous_sdlc
+      POSTGRES_USER: sdlc_user
+      
+      # Redis Configuration
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+      
+      # Security Configuration
+      ENABLE_API_KEY_AUTH: "true"
+      ENABLE_RATE_LIMITING: "true"
+      RATE_LIMIT_REQUESTS_PER_MINUTE: 1000
+      
+    ports:
+      - "8080:8080"   # Main API
+      - "9090:9090"   # Prometheus metrics
+      
+    volumes:
+      # Temporary directories (writable)
+      - type: tmpfs
+        target: /tmp
+        tmpfs:
+          size: 100M
+      - type: tmpfs
+        target: /var/tmp
+        tmpfs:
+          size: 50M
+      
+      # Configuration
+      - ./config/production.yml:/app/config/production.yml:ro
+      - ./config/agents.yml:/app/config/agents.yml:ro
+      
+      # Logs
+      - autonomous-sdlc-logs:/var/log/autonomous-sdlc
+      
+    networks:
+      - autonomous-sdlc-network
+      - monitoring-network
+      
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.autonomous-sdlc.rule=Host(`autonomous-sdlc.terragonlabs.com`)"
+      - "traefik.http.routers.autonomous-sdlc.tls=true"
+      - "traefik.http.routers.autonomous-sdlc.tls.certresolver=letsencrypt"
+      - "traefik.http.services.autonomous-sdlc.loadbalancer.server.port=8080"
+
+  # PostgreSQL Database for State Management
+  postgres:
+    image: postgres:15-alpine
+    container_name: autonomous-sdlc-postgres
+    restart: unless-stopped
+    
+    environment:
+      POSTGRES_DB: autonomous_sdlc
+      POSTGRES_USER: sdlc_user
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+      
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sdlc_user -d autonomous_sdlc"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 80s
+      
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+          
+    networks:
+      - autonomous-sdlc-network
+      
+    secrets:
+      - postgres_password
+
+  # Redis for Caching and Session Management
+  redis:
+    image: redis:7-alpine
+    container_name: autonomous-sdlc-redis
+    restart: unless-stopped
+    
+    command: >
+      redis-server
+      --appendonly yes
+      --appendfsync everysec
+      --maxmemory 1gb
+      --maxmemory-policy allkeys-lru
+      --requirepass /run/secrets/redis_password
+      
+    volumes:
+      - redis-data:/data
+      
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 30s
+      timeout: 3s
+      retries: 5
+      start_period: 40s
+      
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 1G
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+          
+    networks:
+      - autonomous-sdlc-network
+      
+    secrets:
+      - redis_password
+
+  # Load Balancer and Reverse Proxy
+  traefik:
+    image: traefik:v3.0
+    container_name: autonomous-sdlc-traefik
+    restart: unless-stopped
+    
+    command:
+      - "--api.dashboard=true"
+      - "--api.insecure=false"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.email=admin@terragonlabs.com"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+      - "--metrics.prometheus=true"
+      - "--tracing.jaeger=true"
+      - "--tracing.jaeger.collector.endpoint=http://jaeger:14268/api/traces"
+      
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8081:8080"  # Traefik dashboard
+      
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik-letsencrypt:/letsencrypt
+      
+    networks:
+      - autonomous-sdlc-network
+      - monitoring-network
+      
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.rule=Host(`traefik.terragonlabs.com`)"
+      - "traefik.http.routers.dashboard.tls=true"
+      - "traefik.http.routers.dashboard.tls.certresolver=letsencrypt"
+
+  # Prometheus for Metrics Collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: autonomous-sdlc-prometheus
+    restart: unless-stopped
+    
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+      
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/rules/:/etc/prometheus/rules/:ro
+      - prometheus-data:/prometheus
+      
+    networks:
+      - monitoring-network
+      
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          cpus: '0.25'
+          memory: 512M
+
+  # Grafana for Visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: autonomous-sdlc-grafana
+    restart: unless-stopped
+    
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD_FILE: /run/secrets/grafana_password
+      GF_INSTALL_PLUGINS: grafana-piechart-panel,grafana-worldmap-panel
+      GF_SMTP_ENABLED: "true"
+      GF_SMTP_HOST: smtp.terragonlabs.com:587
+      GF_SMTP_FROM_ADDRESS: grafana@terragonlabs.com
+      
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana-dashboard.json:/etc/grafana/provisioning/dashboards/dashboard.json:ro
+      - ./monitoring/grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
+      
+    networks:
+      - monitoring-network
+      
+    secrets:
+      - grafana_password
+      
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana.rule=Host(`grafana.terragonlabs.com`)"
+      - "traefik.http.routers.grafana.tls=true"
+      - "traefik.http.routers.grafana.tls.certresolver=letsencrypt"
+
+  # Jaeger for Distributed Tracing
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: autonomous-sdlc-jaeger
+    restart: unless-stopped
+    
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+      
+    networks:
+      - monitoring-network
+      
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.jaeger.rule=Host(`jaeger.terragonlabs.com`)"
+      - "traefik.http.routers.jaeger.tls=true"
+      - "traefik.http.routers.jaeger.tls.certresolver=letsencrypt"
+
+  # ElasticSearch for Log Aggregation
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: autonomous-sdlc-elasticsearch
+    restart: unless-stopped
+    
+    environment:
+      discovery.type: single-node
+      ES_JAVA_OPTS: "-Xms1g -Xmx1g"
+      xpack.security.enabled: "true"
+      ELASTIC_PASSWORD_FILE: /run/secrets/elasticsearch_password
+      
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+      
+    networks:
+      - monitoring-network
+      
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+          
+    secrets:
+      - elasticsearch_password
+
+  # Kibana for Log Visualization
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.11.0
+    container_name: autonomous-sdlc-kibana
+    restart: unless-stopped
+    
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+      ELASTICSEARCH_USERNAME: elastic
+      ELASTICSEARCH_PASSWORD_FILE: /run/secrets/elasticsearch_password
+      
+    networks:
+      - monitoring-network
+      
+    depends_on:
+      - elasticsearch
+      
+    secrets:
+      - elasticsearch_password
+      
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.kibana.rule=Host(`kibana.terragonlabs.com`)"
+      - "traefik.http.routers.kibana.tls=true"
+      - "traefik.http.routers.kibana.tls.certresolver=letsencrypt"
+
+  # Node Exporter for System Metrics
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: autonomous-sdlc-node-exporter
+    restart: unless-stopped
+    
+    command:
+      - '--path.rootfs=/host'
+      
+    volumes:
+      - '/:/host:ro,rslave'
+      
+    networks:
+      - monitoring-network
+      
+    deploy:
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 128M
+
+  # Backup Service for Data Protection
+  backup:
+    image: terragonlabs/autonomous-sdlc-backup:latest
+    container_name: autonomous-sdlc-backup
+    restart: unless-stopped
+    
+    environment:
+      BACKUP_SCHEDULE: "0 2 * * *"  # Daily at 2 AM
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: autonomous_sdlc
+      POSTGRES_USER: sdlc_user
+      S3_BUCKET: autonomous-sdlc-backups
+      S3_REGION: us-east-1
+      
+    volumes:
+      - autonomous-sdlc-logs:/backup/logs:ro
+      - postgres-data:/backup/postgres:ro
+      - redis-data:/backup/redis:ro
+      
+    networks:
+      - autonomous-sdlc-network
+      
+    secrets:
+      - postgres_password
+      - aws_credentials
+
+# Network Configuration
+networks:
+  autonomous-sdlc-network:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.20.0.0/16
+    driver_opts:
+      com.docker.network.bridge.name: sdlc-bridge
+      
+  monitoring-network:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.21.0.0/16
+    driver_opts:
+      com.docker.network.bridge.name: monitoring-bridge
+
+# Volume Configuration
+volumes:
+  postgres-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/autonomous-sdlc/data/postgres
+      
+  redis-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/autonomous-sdlc/data/redis
+      
+  prometheus-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/autonomous-sdlc/data/prometheus
+      
+  grafana-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/autonomous-sdlc/data/grafana
+      
+  elasticsearch-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/autonomous-sdlc/data/elasticsearch
+      
+  autonomous-sdlc-logs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/autonomous-sdlc/logs
+      
+  traefik-letsencrypt:
+    driver: local
+
+# Secrets Configuration
+secrets:
+  postgres_password:
+    file: ./secrets/postgres_password.txt
+  redis_password:
+    file: ./secrets/redis_password.txt
+  grafana_password:
+    file: ./secrets/grafana_password.txt
+  elasticsearch_password:
+    file: ./secrets/elasticsearch_password.txt
+  aws_credentials:
+    file: ./secrets/aws_credentials.txt
+
+# Configuration for Docker Swarm (uncomment for swarm deployment)
+# x-deploy-labels: &deploy-labels
+#   - "traefik.enable=true"
+#   - "traefik.docker.network=autonomous-sdlc-network"
+
+# configs:
+#   prometheus_config:
+#     file: ./monitoring/prometheus.yml
+#   grafana_config:
+#     file: ./monitoring/grafana-dashboard.json
