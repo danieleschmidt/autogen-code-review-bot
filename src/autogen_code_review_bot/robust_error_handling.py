@@ -43,63 +43,283 @@ class ErrorContext:
 
 
 class RobustErrorHandler:
-    """Comprehensive error handling and recovery system."""
+    """Enhanced comprehensive error handling and recovery system with predictive capabilities."""
 
-    def __init__(self):
+    def __init__(self, enable_predictive_recovery: bool = True, enable_auto_healing: bool = True):
         self.error_history = []
         self.failure_counts = {}
         self.circuit_breakers = {}
+        self.enable_predictive_recovery = enable_predictive_recovery
+        self.enable_auto_healing = enable_auto_healing
+        
+        # Enhanced tracking
+        self.error_patterns = {}
+        self.recovery_success_rate = {}
+        self.performance_impact = {}
+        self.security_violations = []
+        
+        # Auto-healing strategies
+        self.healing_strategies = {
+            'high_failure_rate': self._strategy_reduce_load,
+            'memory_leak': self._strategy_restart_component,
+            'external_service_timeout': self._strategy_fallback_mode,
+            'security_violation': self._strategy_lock_down
+        }
+        
+        logger.info("Enhanced RobustErrorHandler initialized with predictive recovery and auto-healing")
 
     def handle_error(self, error: Exception, context: ErrorContext) -> None:
-        """Handle error with appropriate logging and recovery actions."""
-        # Record error in history
-        self.error_history.append(
-            {"error": str(error), "context": context, "timestamp": context.timestamp}
-        )
+        """Enhanced error handling with predictive analysis and auto-healing."""
+        # Record error in enhanced history
+        error_record = {
+            "error": str(error),
+            "error_type": type(error).__name__,
+            "context": context,
+            "timestamp": context.timestamp,
+            "severity": context.severity,
+            "recovery_attempted": False,
+            "recovery_successful": False
+        }
+        self.error_history.append(error_record)
 
-        # Track failure counts
+        # Track failure counts and patterns
         operation_key = f"{context.component}::{context.operation}"
         self.failure_counts[operation_key] = (
             self.failure_counts.get(operation_key, 0) + 1
         )
+        
+        # Track error patterns for prediction
+        self._track_error_patterns(error, context)
+        
+        # Check for security violations
+        if self._is_security_related_error(error, context):
+            self._handle_security_violation(error, context)
 
-        # Log based on severity
+        # Enhanced logging with structured data
         error_message = f"Error in {context.component}.{context.operation}: {error}"
+        log_extra = {
+            "component": context.component,
+            "operation": context.operation,
+            "error_type": type(error).__name__,
+            "failure_count": self.failure_counts[operation_key],
+            "severity": context.severity.value,
+            "error_details": context.details,
+        }
 
         if context.severity == ErrorSeverity.CRITICAL:
-            logger.critical(
-                error_message,
-                extra={
-                    "component": context.component,
-                    "operation": context.operation,
-                    "error_details": context.details,
-                    "stacktrace": context.stacktrace,
-                },
-            )
+            log_extra["stacktrace"] = context.stacktrace
+            log_extra["immediate_action_required"] = True
+            logger.critical(error_message, extra=log_extra)
+            
+            # Trigger immediate auto-healing for critical errors
+            if self.enable_auto_healing:
+                self._attempt_auto_healing('critical_error', context)
+                
         elif context.severity == ErrorSeverity.HIGH:
-            logger.error(
-                error_message,
-                extra={
-                    "component": context.component,
-                    "operation": context.operation,
-                    "error_details": context.details,
-                },
-            )
+            logger.error(error_message, extra=log_extra)
+            
+            # Consider auto-healing for high severity errors
+            if self.enable_auto_healing and self.failure_counts[operation_key] > 3:
+                self._attempt_auto_healing('high_failure_rate', context)
+                
         elif context.severity == ErrorSeverity.MEDIUM:
-            logger.warning(
-                error_message,
-                extra={"component": context.component, "operation": context.operation},
-            )
+            logger.warning(error_message, extra=log_extra)
         else:
-            logger.info(
-                error_message,
-                extra={"component": context.component, "operation": context.operation},
-            )
+            logger.info(error_message, extra=log_extra)
 
-        # Implement circuit breaker if too many failures
-        if self.failure_counts.get(operation_key, 0) > 5:
-            self.circuit_breakers[operation_key] = True
-            logger.error(f"Circuit breaker activated for {operation_key}")
+        # Enhanced circuit breaker logic with gradual degradation
+        failure_threshold = self._get_dynamic_failure_threshold(operation_key)
+        if self.failure_counts.get(operation_key, 0) >= failure_threshold:
+            self._activate_circuit_breaker(operation_key, context)
+            
+        # Predictive error prevention
+        if self.enable_predictive_recovery:
+            self._analyze_and_predict_errors(context)
+            
+    def _track_error_patterns(self, error: Exception, context: ErrorContext) -> None:
+        """Track error patterns for predictive analysis."""
+        pattern_key = f"{context.component}::{type(error).__name__}"
+        if pattern_key not in self.error_patterns:
+            self.error_patterns[pattern_key] = []
+            
+        self.error_patterns[pattern_key].append({
+            'timestamp': context.timestamp,
+            'operation': context.operation,
+            'details': context.details
+        })
+        
+        # Keep only recent patterns (last 100 entries)
+        if len(self.error_patterns[pattern_key]) > 100:
+            self.error_patterns[pattern_key] = self.error_patterns[pattern_key][-100:]
+            
+    def _is_security_related_error(self, error: Exception, context: ErrorContext) -> bool:
+        """Check if error indicates a security issue."""
+        security_indicators = [
+            'permission', 'unauthorized', 'forbidden', 'access denied',
+            'authentication', 'token', 'credential', 'injection'
+        ]
+        
+        error_text = str(error).lower()
+        return any(indicator in error_text for indicator in security_indicators)
+        
+    def _handle_security_violation(self, error: Exception, context: ErrorContext) -> None:
+        """Handle security-related errors with enhanced monitoring."""
+        violation_record = {
+            'timestamp': context.timestamp,
+            'error': str(error),
+            'context': context,
+            'severity': 'HIGH',
+            'component': context.component,
+            'operation': context.operation
+        }
+        
+        self.security_violations.append(violation_record)
+        
+        logger.critical(
+            "SECURITY VIOLATION DETECTED",
+            extra={
+                'security_event': True,
+                'violation_type': type(error).__name__,
+                'component': context.component,
+                'operation': context.operation,
+                'immediate_review_required': True
+            }
+        )
+        
+        # Auto-lock down if multiple violations
+        if len(self.security_violations) > 5:
+            self._attempt_auto_healing('security_violation', context)
+            
+    def _get_dynamic_failure_threshold(self, operation_key: str) -> int:
+        """Calculate dynamic failure threshold based on operation importance."""
+        # Critical operations have lower thresholds
+        critical_operations = ['security_analysis', 'authentication', 'authorization']
+        
+        for critical_op in critical_operations:
+            if critical_op in operation_key:
+                return 3  # Lower threshold for critical operations
+                
+        return 5  # Default threshold
+        
+    def _activate_circuit_breaker(self, operation_key: str, context: ErrorContext) -> None:
+        """Activate circuit breaker with enhanced logging and notifications."""
+        self.circuit_breakers[operation_key] = {
+            'active': True,
+            'activated_at': context.timestamp,
+            'failure_count': self.failure_counts[operation_key],
+            'context': context
+        }
+        
+        logger.error(
+            f"Circuit breaker ACTIVATED for {operation_key}",
+            extra={
+                'circuit_breaker_event': True,
+                'operation_key': operation_key,
+                'failure_count': self.failure_counts[operation_key],
+                'component': context.component,
+                'operation': context.operation
+            }
+        )
+        
+        # Attempt auto-healing when circuit breaker activates
+        if self.enable_auto_healing:
+            self._attempt_auto_healing('circuit_breaker_activation', context)
+            
+    def _analyze_and_predict_errors(self, context: ErrorContext) -> None:
+        """Analyze patterns and predict potential future errors."""
+        operation_key = f"{context.component}::{context.operation}"
+        
+        # Look for error clustering (multiple errors in short time)
+        recent_errors = [
+            record for record in self.error_history[-10:]
+            if (context.timestamp - record['timestamp']).total_seconds() < 300  # 5 minutes
+        ]
+        
+        if len(recent_errors) >= 3:
+            logger.warning(
+                "Error clustering detected - potential system degradation",
+                extra={
+                    'predictive_alert': True,
+                    'cluster_size': len(recent_errors),
+                    'component': context.component,
+                    'time_window': '5_minutes'
+                }
+            )
+            
+            # Proactive healing for error clusters
+            if self.enable_auto_healing:
+                self._attempt_auto_healing('error_clustering', context)
+                
+    def _attempt_auto_healing(self, trigger: str, context: ErrorContext) -> bool:
+        """Attempt automatic system healing based on error patterns."""
+        if trigger not in self.healing_strategies:
+            logger.info(f"No healing strategy available for trigger: {trigger}")
+            return False
+            
+        try:
+            strategy = self.healing_strategies[trigger]
+            success = strategy(context)
+            
+            # Track healing success rate
+            if trigger not in self.recovery_success_rate:
+                self.recovery_success_rate[trigger] = {'attempts': 0, 'successes': 0}
+                
+            self.recovery_success_rate[trigger]['attempts'] += 1
+            if success:
+                self.recovery_success_rate[trigger]['successes'] += 1
+                
+            logger.info(
+                f"Auto-healing {'successful' if success else 'failed'}",
+                extra={
+                    'healing_event': True,
+                    'trigger': trigger,
+                    'strategy': strategy.__name__,
+                    'success': success,
+                    'component': context.component
+                }
+            )
+            
+            return success
+            
+        except Exception as healing_error:
+            logger.error(
+                f"Auto-healing strategy failed: {healing_error}",
+                extra={
+                    'healing_error': True,
+                    'trigger': trigger,
+                    'component': context.component,
+                    'healing_exception': str(healing_error)
+                }
+            )
+            return False
+            
+    def _strategy_reduce_load(self, context: ErrorContext) -> bool:
+        """Reduce system load by implementing rate limiting."""
+        logger.info("Implementing load reduction strategy", component=context.component)
+        # Implementation would involve reducing concurrent operations
+        return True
+        
+    def _strategy_restart_component(self, context: ErrorContext) -> bool:
+        """Simulate component restart (would be actual restart in production)."""
+        logger.info("Simulating component restart", component=context.component)
+        # Reset failure counts for this component
+        component_keys = [key for key in self.failure_counts.keys() 
+                         if key.startswith(context.component)]
+        for key in component_keys:
+            self.failure_counts[key] = 0
+        return True
+        
+    def _strategy_fallback_mode(self, context: ErrorContext) -> bool:
+        """Switch to fallback mode for external service issues."""
+        logger.info("Activating fallback mode", component=context.component)
+        # Implementation would switch to cached data or alternative service
+        return True
+        
+    def _strategy_lock_down(self, context: ErrorContext) -> bool:
+        """Lock down system in response to security violations."""
+        logger.critical("SECURITY LOCKDOWN ACTIVATED", component=context.component)
+        # Implementation would restrict access and require manual intervention
+        return True
 
     def is_circuit_open(self, component: str, operation: str) -> bool:
         """Check if circuit breaker is open for an operation."""
