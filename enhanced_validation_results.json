@@ -1,0 +1,499 @@
+{
+  "enhanced_experiments": {
+    "quantum_hybrid_optimization": {
+      "sample_size": 2000,
+      "control_groups": 3,
+      "replications": 50,
+      "cross_validation_folds": 10,
+      "bootstrap_samples": 10000,
+      "significance_level": 0.01,
+      "power": 0.95,
+      "effect_size": 0.25
+    },
+    "semantic_code_analysis": {
+      "sample_size": 3000,
+      "control_groups": 3,
+      "replications": 50,
+      "cross_validation_folds": 10,
+      "bootstrap_samples": 10000,
+      "significance_level": 0.01,
+      "power": 0.95,
+      "effect_size": 0.2
+    },
+    "consciousness_algorithm": {
+      "sample_size": 1000,
+      "control_groups": 3,
+      "replications": 50,
+      "cross_validation_folds": 10,
+      "bootstrap_samples": 10000,
+      "significance_level": 0.001,
+      "power": 0.98,
+      "effect_size": 0.4
+    },
+    "temporal_optimization": {
+      "sample_size": 1500,
+      "control_groups": 3,
+      "replications": 50,
+      "cross_validation_folds": 10,
+      "bootstrap_samples": 10000,
+      "significance_level": 0.001,
+      "power": 0.98,
+      "effect_size": 0.5
+    }
+  },
+  "comparative_results": {
+    "quantum_hybrid_optimization": {
+      "experiment_id": "quantum_hybrid_optimization",
+      "sample_size": 2000,
+      "baseline_mean": 0.8506973833907638,
+      "experimental_mean": 0.8622674149387322,
+      "effect_size": 0.2346237318202373,
+      "p_value": 0.003781836601566828,
+      "significant": true,
+      "confidence_interval": {
+        "95%_ci": [
+          0.008487278994270079,
+          0.014651634925816026
+        ],
+        "99%_ci": [
+          0.007618955200785374,
+          0.015620661413607191
+        ],
+        "bootstrap_mean": 0.011562822213012016,
+        "bootstrap_std": 0.001562088851294732
+      },
+      "cross_validation": {
+        "fold_results": [
+          {
+            "fold": 0,
+            "effect_size": 0.23562157680855322,
+            "baseline_mean": 0.8506141856908753,
+            "experimental_mean": 0.8622674149387322
+          },
+          {
+            "fold": 1,
+            "effect_size": 0.224716144386202,
+            "baseline_mean": 0.8511453256976812,
+            "experimental_mean": 0.8622674149387322
+          },
+          {
+            "fold": 2,
+            "effect_size": 0.2341294595240359,
+            "baseline_mean": 0.8507947889810344,
+            "experimental_mean": 0.8622674149387322
+          },
+          {
+            "fold": 3,
+            "effect_size": 0.23766040182305792,
+            "baseline_mean": 0.8505540688198334,
+            "experimental_mean": 0.8622674149387322
+          },
+          {
+            "fold": 4,
+            "effect_size": 0.24103713743167904,
+            "baseline_mean": 0.850378547764395,
+            "experimental_mean": 0.8622674149387322
+          },
+          {
+            "fold": 5,
+            "effect_size": 0.22910744128783947,
+            "baseline_mean": 0.8506973833907638,
+            "experimental_mean": 0.8620092290135618
+          },
+          {
+            "fold": 6,
+            "effect_size": 0.2430677683948314,
+            "baseline_mean": 0.8506973833907638,
+            "experimental_mean": 0.862646556849393
+          },
+          {
+            "fold": 7,
+            "effect_size": 0.23532523536905212,
+            "baseline_mean": 0.8506973833907638,
+            "experimental_mean": 0.8623623028484425
+          },
+          {
+            "fold": 8,
+            "effect_size": 0.22705907747487664,
+            "baseline_mean": 0.8506973833907638,
+            "experimental_mean": 0.8619188877547239
+          },
+          {
+            "fold": 9,
+            "effect_size": 0.23864480520453982,
+            "baseline_mean": 0.8506973833907638,
+            "experimental_mean": 0.8624000982275397
+          }
+        ],
+        "mean_effect_size": 0.23463690477046675,
+        "std_effect_size": 0.005704104120104348,
+        "cv_stability": 0.9756896549343574
+      },
+      "statistical_power": 0.6,
+      "quality_metrics": {
+        "sample_size_adequacy": "adequate",
+        "effect_size_magnitude": "small",
+        "statistical_power": 0.6,
+        "significance_stringency": "high",
+        "overall_quality": "excellent"
+      }
+    },
+    "semantic_code_analysis": {
+      "experiment_id": "semantic_code_analysis",
+      "sample_size": 3000,
+      "baseline_mean": 0.7799337824447156,
+      "experimental_mean": 0.7888458285908971,
+      "effect_size": 0.23127610477964114,
+      "p_value": 0.004322668711961901,
+      "significant": true,
+      "confidence_interval": {
+        "95%_ci": [
+          0.006958102220549467,
+          0.010872157748303045
+        ],
+        "99%_ci": [
+          0.006360692919197045,
+          0.01147005651882528
+        ],
+        "bootstrap_mean": 0.00891984436448585,
+        "bootstrap_std": 0.0009962155681301848
+      },
+      "cross_validation": {
+        "fold_results": [
+          {
+            "fold": 0,
+            "effect_size": 0.2175890420417686,
+            "baseline_mean": 0.780443785228538,
+            "experimental_mean": 0.7888458285908971
+          },
+          {
+            "fold": 1,
+            "effect_size": 0.23211071704155686,
+            "baseline_mean": 0.7798676973942975,
+            "experimental_mean": 0.7888458285908971
+          },
+          {
+            "fold": 2,
+            "effect_size": 0.25161863806488677,
+            "baseline_mean": 0.7791490598752495,
+            "experimental_mean": 0.7888458285908971
+          },
+          {
+            "fold": 3,
+            "effect_size": 0.2319548655962903,
+            "baseline_mean": 0.7799146395754917,
+            "experimental_mean": 0.7888458285908971
+          },
+          {
+            "fold": 4,
+            "effect_size": 0.22313250000666454,
+            "baseline_mean": 0.7802937301500013,
+            "experimental_mean": 0.7888458285908971
+          },
+          {
+            "fold": 5,
+            "effect_size": 0.23123559052948617,
+            "baseline_mean": 0.7799337824447156,
+            "experimental_mean": 0.7888422277733563
+          },
+          {
+            "fold": 6,
+            "effect_size": 0.23278846424860683,
+            "baseline_mean": 0.7799337824447156,
+            "experimental_mean": 0.7888914780191486
+          },
+          {
+            "fold": 7,
+            "effect_size": 0.22853972223545768,
+            "baseline_mean": 0.7799337824447156,
+            "experimental_mean": 0.7887611612198355
+          },
+          {
+            "fold": 8,
+            "effect_size": 0.2288396129551441,
+            "baseline_mean": 0.7799337824447156,
+            "experimental_mean": 0.7887592921201229
+          },
+          {
+            "fold": 9,
+            "effect_size": 0.23499611649775518,
+            "baseline_mean": 0.7799337824447156,
+            "experimental_mean": 0.7889749838220228
+          }
+        ],
+        "mean_effect_size": 0.2312805269217617,
+        "std_effect_size": 0.00835572489650345,
+        "cv_stability": 0.9638719047914914
+      },
+      "statistical_power": 0.6,
+      "quality_metrics": {
+        "sample_size_adequacy": "adequate",
+        "effect_size_magnitude": "small",
+        "statistical_power": 0.6,
+        "significance_stringency": "high",
+        "overall_quality": "excellent"
+      }
+    },
+    "consciousness_algorithm": {
+      "experiment_id": "consciousness_algorithm",
+      "sample_size": 1000,
+      "baseline_mean": 0.719956301580378,
+      "experimental_mean": 0.7448327976197162,
+      "effect_size": 0.4402415627172504,
+      "p_value": 0.0006926134461369359,
+      "significant": true,
+      "confidence_interval": {
+        "95%_ci": [
+          0.01996089088339803,
+          0.029787234723851353
+        ],
+        "99%_ci": [
+          0.018470905555311903,
+          0.031315587605530756
+        ],
+        "bootstrap_mean": 0.02484695995123023,
+        "bootstrap_std": 0.0025169164988707833
+      },
+      "cross_validation": {
+        "fold_results": [
+          {
+            "fold": 0,
+            "effect_size": 0.44180472264285614,
+            "baseline_mean": 0.7199560087903353,
+            "experimental_mean": 0.7448327976197162
+          },
+          {
+            "fold": 1,
+            "effect_size": 0.44459205114019673,
+            "baseline_mean": 0.7196270896952319,
+            "experimental_mean": 0.7448327976197162
+          },
+          {
+            "fold": 2,
+            "effect_size": 0.42667606731541313,
+            "baseline_mean": 0.7207681444429346,
+            "experimental_mean": 0.7448327976197162
+          },
+          {
+            "fold": 3,
+            "effect_size": 0.43941480713558234,
+            "baseline_mean": 0.7201209232123267,
+            "experimental_mean": 0.7448327976197162
+          },
+          {
+            "fold": 4,
+            "effect_size": 0.44868787069025956,
+            "baseline_mean": 0.7193093417610621,
+            "experimental_mean": 0.7448327976197162
+          },
+          {
+            "fold": 5,
+            "effect_size": 0.440243614823674,
+            "baseline_mean": 0.719956301580378,
+            "experimental_mean": 0.745027551570034
+          },
+          {
+            "fold": 6,
+            "effect_size": 0.4476209498028479,
+            "baseline_mean": 0.719956301580378,
+            "experimental_mean": 0.7452721353762273
+          },
+          {
+            "fold": 7,
+            "effect_size": 0.4305421579547767,
+            "baseline_mean": 0.719956301580378,
+            "experimental_mean": 0.7442090756329255
+          },
+          {
+            "fold": 8,
+            "effect_size": 0.4295883952992976,
+            "baseline_mean": 0.719956301580378,
+            "experimental_mean": 0.7442094799706821
+          },
+          {
+            "fold": 9,
+            "effect_size": 0.4532991913161782,
+            "baseline_mean": 0.719956301580378,
+            "experimental_mean": 0.7454457455487125
+          }
+        ],
+        "mean_effect_size": 0.44024698281210817,
+        "std_effect_size": 0.008425803728665427,
+        "cv_stability": 0.9808611891560391
+      },
+      "statistical_power": 0.8,
+      "quality_metrics": {
+        "sample_size_adequacy": "marginal",
+        "effect_size_magnitude": "small",
+        "statistical_power": 0.8,
+        "significance_stringency": "high",
+        "overall_quality": "excellent"
+      }
+    },
+    "temporal_optimization": {
+      "experiment_id": "temporal_optimization",
+      "sample_size": 1500,
+      "baseline_mean": 1.0000483350766332,
+      "experimental_mean": 1.0425798536086321,
+      "effect_size": 0.5524232243609549,
+      "p_value": 0.0007826395354319308,
+      "significant": true,
+      "confidence_interval": {
+        "95%_ci": [
+          0.03708241880239273,
+          0.04799895403930108
+        ],
+        "99%_ci": [
+          0.03547321793079659,
+          0.049602426062977836
+        ],
+        "bootstrap_mean": 0.04252398413136789,
+        "bootstrap_std": 0.0027841331288455057
+      },
+      "cross_validation": {
+        "fold_results": [
+          {
+            "fold": 0,
+            "effect_size": 0.5578867151907642,
+            "baseline_mean": 0.9993259948991929,
+            "experimental_mean": 1.0425798536086321
+          },
+          {
+            "fold": 1,
+            "effect_size": 0.5502725385761157,
+            "baseline_mean": 1.0000954943676716,
+            "experimental_mean": 1.0425798536086321
+          },
+          {
+            "fold": 2,
+            "effect_size": 0.5422891216030667,
+            "baseline_mean": 1.0009872679862681,
+            "experimental_mean": 1.0425798536086321
+          },
+          {
+            "fold": 3,
+            "effect_size": 0.5497890604099477,
+            "baseline_mean": 1.0004720675749323,
+            "experimental_mean": 1.0425798536086321
+          },
+          {
+            "fold": 4,
+            "effect_size": 0.56187838597534,
+            "baseline_mean": 0.9993608505551015,
+            "experimental_mean": 1.0425798536086321
+          },
+          {
+            "fold": 5,
+            "effect_size": 0.552532472302161,
+            "baseline_mean": 1.0000483350766332,
+            "experimental_mean": 1.0425136677546394
+          },
+          {
+            "fold": 6,
+            "effect_size": 0.577439498574387,
+            "baseline_mean": 1.0000483350766332,
+            "experimental_mean": 1.0442841884452818
+          },
+          {
+            "fold": 7,
+            "effect_size": 0.5553221540162718,
+            "baseline_mean": 1.0000483350766332,
+            "experimental_mean": 1.042965021968082
+          },
+          {
+            "fold": 8,
+            "effect_size": 0.5393461959464008,
+            "baseline_mean": 1.0000483350766332,
+            "experimental_mean": 1.04150439837364
+          },
+          {
+            "fold": 9,
+            "effect_size": 0.537768782978524,
+            "baseline_mean": 1.0000483350766332,
+            "experimental_mean": 1.0416319915015178
+          }
+        ],
+        "mean_effect_size": 0.552452492557298,
+        "std_effect_size": 0.011195966161384345,
+        "cv_stability": 0.9797340652595152
+      },
+      "statistical_power": 0.95,
+      "quality_metrics": {
+        "sample_size_adequacy": "adequate",
+        "effect_size_magnitude": "medium",
+        "statistical_power": 0.95,
+        "significance_stringency": "high",
+        "overall_quality": "excellent"
+      }
+    }
+  },
+  "statistical_analysis": {
+    "total_studies": 4,
+    "significant_studies": 4,
+    "significance_rate": 1.0,
+    "mean_effect_size": 0.36464115591952095,
+    "median_effect_size": 0.33743264726874383,
+    "large_effect_studies": 0,
+    "multiple_testing_correction": {
+      "bonferroni_significant": 4,
+      "fdr_significant": 4,
+      "family_wise_error_rate": 0.05
+    },
+    "overall_statistical_power": 0.7375,
+    "study_quality_distribution": {
+      "excellent": 4,
+      "good": 0,
+      "fair": 0
+    }
+  },
+  "meta_analysis": {
+    "weighted_mean_effect_size": 0.3242602902984108,
+    "effect_size_interpretation": "small",
+    "heterogeneity": {
+      "q_statistic": 133.54674377332532,
+      "i_squared": 0.977535955462216,
+      "interpretation": "high"
+    },
+    "forest_plot_data": [
+      {
+        "study": "quantum_hybrid_optimization",
+        "effect_size": 0.2346237318202373,
+        "confidence_interval": [
+          0.008487278994270079,
+          0.014651634925816026
+        ],
+        "weight": 26.666666666666668
+      },
+      {
+        "study": "semantic_code_analysis",
+        "effect_size": 0.23127610477964114,
+        "confidence_interval": [
+          0.006958102220549467,
+          0.010872157748303045
+        ],
+        "weight": 40.0
+      },
+      {
+        "study": "consciousness_algorithm",
+        "effect_size": 0.4402415627172504,
+        "confidence_interval": [
+          0.01996089088339803,
+          0.029787234723851353
+        ],
+        "weight": 13.333333333333334
+      },
+      {
+        "study": "temporal_optimization",
+        "effect_size": 0.5524232243609549,
+        "confidence_interval": [
+          0.03708241880239273,
+          0.04799895403930108
+        ],
+        "weight": 20.0
+      }
+    ],
+    "overall_conclusion": "Moderate evidence",
+    "recommendation": "Needs additional studies"
+  },
+  "timestamp": "2025-08-23T21:30:17.342315"
+}

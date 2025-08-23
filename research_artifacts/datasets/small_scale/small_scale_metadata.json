@@ -1,0 +1,49 @@
+{
+  "metadata": {
+    "n_samples": 1000,
+    "n_features": 10,
+    "complexity": "low",
+    "generation_seed": 42,
+    "noise_level": 0.1
+  },
+  "feature_names": [
+    "code_metric_0",
+    "code_metric_1",
+    "complexity_metric_0",
+    "complexity_metric_1",
+    "quality_metric_0",
+    "quality_metric_1",
+    "performance_metric_0",
+    "performance_metric_1",
+    "performance_metric_2",
+    "performance_metric_3"
+  ],
+  "sample_statistics": {
+    "feature_means": [
+      0.010787543426031209,
+      0.03129238631214353,
+      -0.022541792202209063,
+      -0.043075340992347735,
+      0.013621602426411514,
+      -0.0292519226834462,
+      -0.002688865607713388,
+      0.005495418185894314,
+      -0.023103599633018487,
+      0.03810473708399222
+    ],
+    "feature_stds": [
+      1.0049297548654315,
+      1.0155376950876949,
+      0.9828737629446854,
+      0.9829145028779379,
+      1.0121386979258449,
+      1.0365052918128508,
+      1.0307145886386404,
+      1.0304462914513175,
+      0.9863528862220438,
+      0.9448111438297442
+    ],
+    "target_mean": 0.05376252698815284,
+    "target_std": 2.789135455465243
+  }
+}
