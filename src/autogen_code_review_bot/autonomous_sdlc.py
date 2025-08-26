@@ -977,7 +977,7 @@ class AutonomousSDLC:
             "generation": self.current_generation.value,
         }
         self.execution_log.append(log_entry)
-        logger.info("SDLC execution event", **log_entry)
+        logger.info(event, **{k: v for k, v in log_entry.items() if k != "event"})
 
 
 def create_sdlc_config_for_project(

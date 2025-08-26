@@ -1,0 +1,5 @@
+{
+  "test_timestamp": "2025-08-26T01:19:23.713597",
+  "error": "_make_filtering_bound_logger.<locals>.make_method.<locals>.meth() got multiple values for argument 'event'",
+  "success": false
+}

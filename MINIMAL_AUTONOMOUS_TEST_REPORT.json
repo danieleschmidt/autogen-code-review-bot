@@ -1,14 +1,14 @@
 {
-  "test_timestamp": "2025-08-20T17:23:22.839808",
-  "execution_time": 0.27048659324645996,
+  "test_timestamp": "2025-08-26T01:18:48.144182",
+  "execution_time": 0.12245368957519531,
   "analysis": {
     "project_info": {
       "type": "library",
       "languages": [
         "python"
       ],
-      "total_files": 8753,
-      "test_files": 1997,
+      "total_files": 4832,
+      "test_files": 809,
       "config_files": 10
     },
     "structure_analysis": {
@@ -31,7 +31,7 @@
       "basic_logging_setup"
     ],
     "metrics": {
-      "files_processed": 8753,
+      "files_processed": 4832,
       "issues_found": 0,
       "performance_score": 0.8
     }
@@ -92,6 +92,6 @@
   "performance_metrics": {
     "total_enhancements": 14,
     "quality_score": 1.0,
-    "execution_efficiency": "0.27s"
+    "execution_efficiency": "0.12s"
   }
 }
