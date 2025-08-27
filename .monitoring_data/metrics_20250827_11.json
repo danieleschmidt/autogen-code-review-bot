@@ -1,0 +1,72 @@
+{
+  "system.cpu_usage": {
+    "avg": 90.00508474576272,
+    "min": 50.0,
+    "max": 100.0,
+    "count": 59,
+    "timestamp": "2025-08-27T11:57:17.509794"
+  },
+  "system.memory_usage": {
+    "avg": 20.28135593220339,
+    "min": 16.5,
+    "max": 22.3,
+    "count": 59,
+    "timestamp": "2025-08-27T11:57:17.509880"
+  },
+  "system.disk_read_bytes": {
+    "avg": 440564666.5762712,
+    "min": 439847936,
+    "max": 440654848,
+    "count": 59,
+    "timestamp": "2025-08-27T11:57:17.509944"
+  },
+  "system.disk_write_bytes": {
+    "avg": 1306531180.4745762,
+    "min": 1299795968,
+    "max": 1308585984,
+    "count": 59,
+    "timestamp": "2025-08-27T11:57:17.509998"
+  },
+  "system.network_bytes_sent": {
+    "avg": 11260381.745762711,
+    "min": 11202416,
+    "max": 11317745,
+    "count": 59,
+    "timestamp": "2025-08-27T11:57:17.510049"
+  },
+  "system.network_bytes_recv": {
+    "avg": 201574975.05084747,
+    "min": 201550055,
+    "max": 201599416,
+    "count": 59,
+    "timestamp": "2025-08-27T11:57:17.510107"
+  },
+  "breakthrough.efficiency_breakthrough": {
+    "avg": 0.08899018181818183,
+    "min": 0.0,
+    "max": 0.40567100000000006,
+    "count": 11,
+    "timestamp": "2025-08-27T11:57:17.510147"
+  },
+  "breakthrough.resource_optimization": {
+    "avg": 0.9225,
+    "min": 0.9225,
+    "max": 0.9225,
+    "count": 1,
+    "timestamp": "2025-08-27T11:56:17.507815"
+  },
+  "system.health_score": {
+    "avg": 0.621,
+    "min": 0.621,
+    "max": 0.621,
+    "count": 1,
+    "timestamp": "2025-08-27T11:57:17.510171"
+  },
+  "breakthrough.stability_breakthrough": {
+    "avg": 0.7956402953395927,
+    "min": 0.7956402953395927,
+    "max": 0.7956402953395927,
+    "count": 1,
+    "timestamp": "2025-08-27T11:57:17.510191"
+  }
+}
