@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "autogen-code-review-bot"
+version = "2.0.0"
+description = "Two-agent iterative code review loop: Author writes, Reviewer critiques, repeat."
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+dependencies = []  # no hard runtime deps — anthropic is optional
+
+[project.optional-dependencies]
+anthropic = ["anthropic>=0.25"]
+dev = [
+    "pytest>=8",
+    "pytest-cov",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v"
